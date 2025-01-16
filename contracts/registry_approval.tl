@@ -14,7 +14,7 @@ end
 
 # Global State
 
-const int ENTRY_COUNT_KEY = "order_count"
+const bytes ENTRY_COUNT_KEY = "order_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
@@ -86,7 +86,8 @@ func create_entry():
     int app_creation_index = Txn.GroupIndex - 1
     assert(Gtxn[app_creation_index].Sender == Txn.Sender)
     assert(Gtxn[app_creation_index].TypeEnum == Appl)
-    assert(Gtxn[app_creation_index].OnCompletion == CreateApplication)
+    assert(Gtxn[app_creation_index].OnCompletion == NoOp)
+    assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
 
     bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram)
     assert(approval_hash == ORDER_APP_HASH)
@@ -94,7 +95,7 @@ func create_entry():
     entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
 
     int entry_count = app_global_get(ENTRY_COUNT_KEY)
-    app_global_put(entry_count + 1)
+    app_global_put(ENTRY_COUNT_KEY, entry_count + 1)
 
     # Logs
     log(ARC28Event("entry(address,int)", Txn.Sender, entry))

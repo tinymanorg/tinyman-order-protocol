@@ -12,11 +12,9 @@ struct Order:
     amount: int
     target_asset_id: int
     target_rate: int
-
     # Filling fields.
     filled_amount: int
     is_partial_allowed: int
-
     creation_timestamp: int
     expiration_timestamp: int
 end
@@ -25,7 +23,7 @@ end
 # Global State
 
 const bytes USER_ADDRESS_KEY = "user_address"
-const int TOTAL_ORDER_COUNT_KEY = "order_count"
+const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
@@ -113,7 +111,7 @@ end
 @public()
 func put_order(asset_id: int, amount: int, target_asset_id: int, target_rate: int, is_partial_allowed: int, expiration_timestamp: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    assert(Txn.Sender = user_address)
+    assert(Txn.Sender == user_address)
 
     int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
     box<Order> order = CreateBox(itob(total_order_count))
@@ -153,9 +151,9 @@ end
 # Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
 # Permission: App owner (User)
 @public()
-func cancel_order(order_id: int)
+func cancel_order(order_id: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    assert(Txn.Sender = user_address)
+    assert(Txn.Sender == user_address)
 
     box<Order> order = OpenBox(itob(order_id))
 
@@ -174,7 +172,7 @@ func cancel_order(order_id: int)
     log(ARC28Event("cancel_order(int)", itob(order_id)))
 
     # Delete the box.
-    box_delete(order)
+    _ = box_del(order)
 
     return
 end
@@ -183,6 +181,7 @@ end
 # Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
 # An executor must call `end_execute_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 # Permission: Everyone
+@public()
 func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     box<Order> order = OpenBox(itob(order_id))
 
@@ -223,6 +222,7 @@ end
 # Description: Method checks the validity of the execution between `start_execute_order` and `end_execute_order`.
 # An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
 # Permission: Everyone
+@public()
 func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     box<Order> order = OpenBox(itob(order_id))
 
@@ -240,7 +240,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
 
     # Assert that user received the target amount or more.
     # TODO: Update the calculation with BigInt.
-    int minimum_amount = ((itob(fill_amount) b* itob(order.target_rate)) b/ itob(RATE_SCALER))
+    int minimum_amount = btoi((itob(fill_amount) b* itob(order.target_rate)) b/ itob(RATE_SCALER))
     check_received_target_asset(Txn.GroupIndex - 1, app_global_get(USER_ADDRESS_KEY), order.target_asset_id, minimum_amount)
 
     order.filled_amount = order.filled_amount + fill_amount
@@ -251,7 +251,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
 
     # If all amount is filled, delete the order.
     if order.amount == order.filled_amount:
-        box_delete(order)
+        _ = box_del(order)
     end
 
     return
