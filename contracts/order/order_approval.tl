@@ -35,6 +35,7 @@ const int MAX_UINT64 = 18446744073709551615
 
 router:
     create_application
+    update_application
     init
     propose_manager
     accept_manager
@@ -54,6 +55,14 @@ func create_application(manager_address: bytes[32]):
 
     # create_application(manager_address)
     log(ARC28Event("create_application(address)", manager_address))
+    return
+end
+
+
+# TODO: Remove function for mainnet
+@public(OnCompletion=UpdateApplication)
+func update_application():
+    assert(Txn.Sender == app_global_get("manager"))
     return
 end
 
