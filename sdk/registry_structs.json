@@ -1,0 +1,14 @@
+{
+  "structs": {
+    "Entry": {
+      "size": 8,
+      "fields": {
+        "app_id": {
+          "type": "int",
+          "size": 8,
+          "offset": 0
+        }
+      }
+    }
+  }
+}
