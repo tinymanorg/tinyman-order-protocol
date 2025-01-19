@@ -11,7 +11,7 @@ struct Order:
     asset_id: int
     amount: int
     target_asset_id: int
-    target_rate: int
+    target_amount: int
     # Filling fields.
     filled_amount: int
     is_partial_allowed: int
@@ -29,7 +29,7 @@ const bytes MANAGER_KEY = "manager"
 
 # Math Constants
 
-const int RATE_SCALER = 1000000000
+const int RATE_SCALER = 18446744073709551615
 const int MAX_UINT64 = 18446744073709551615
 
 
@@ -118,7 +118,7 @@ end
 # Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 # Permission: App owner (User)
 @public()
-func put_order(asset_id: int, amount: int, target_asset_id: int, target_rate: int, is_partial_allowed: int, expiration_timestamp: int):
+func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, expiration_timestamp: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
@@ -127,7 +127,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_rate: in
 
     # Assertions
     assert(amount > 0)
-    assert(target_rate > 0)
+    assert(target_amount > 0)
     assert(asset_id != target_asset_id)
     assert(expiration_timestamp > Global.LatestTimestamp)
 
@@ -141,7 +141,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_rate: in
     order.asset_id = asset_id
     order.amount = amount
     order.target_asset_id = target_asset_id
-    order.target_rate = target_rate
+    order.target_amount = target_amount
     order.is_partial_allowed = is_partial_allowed
     order.filled_amount = 0
     order.creation_timestamp = Global.LatestTimestamp
@@ -150,8 +150,10 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_rate: in
     app_global_put(TOTAL_ORDER_COUNT_KEY, total_order_count + 1)
 
     # Logs
-    log(ARC28Event("order(address,int,int,int,int,int,int,int,int)", user_address, itob(total_order_count), order))
-    log(ARC28Event("put_order(int)", itob(total_order_count)))
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("put_order(uint64)", itob(total_order_count)))
 
     return
 end
@@ -177,8 +179,10 @@ func cancel_order(order_id: int):
     transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
 
     # Logs
-    log(ARC28Event("order(address,int,int,int,int,int,int,int,int)", user_address, itob(order_id), order))
-    log(ARC28Event("cancel_order(int)", itob(order_id)))
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_order(uint64)", itob(order_id)))
 
     # Delete the box.
     _ = box_del(order)
@@ -222,7 +226,7 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
 
     # Logs
-    log(ARC28Event("start_execute_order(int,address)", itob(order_id), Txn.Sender))
+    log(ARC28Event("start_execute_order(uint64,address)", itob(order_id), Txn.Sender))
 
     return
 end
@@ -233,6 +237,7 @@ end
 # Permission: Everyone
 @public()
 func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
     box<Order> order = OpenBox(itob(order_id))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
@@ -248,15 +253,23 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == index_diff)
 
     # Assert that user received the target amount or more.
-    # TODO: Update the calculation with BigInt.
-    int minimum_amount = btoi((itob(fill_amount) b* itob(order.target_rate)) b/ itob(RATE_SCALER))
-    check_received_target_asset(Txn.GroupIndex - 1, app_global_get(USER_ADDRESS_KEY), order.target_asset_id, minimum_amount)
+    # TODO: Review the calculations.
+    int minimum_amount
+    if !order.is_partial_allowed:
+        minimum_amount = order.target_amount
+    else:
+        minimum_amount = calculate_minimum_amount(order.amount, order.target_amount, fill_amount)
+    end
+
+    int received_amount = check_received_target_asset(Txn.GroupIndex - 1, user_address, order.target_asset_id, minimum_amount)
 
     order.filled_amount = order.filled_amount + fill_amount
 
     # Logs
-    log(ARC28Event("order(address,int,int,int,int,int,int,int,int)", app_global_get(USER_ADDRESS_KEY), itob(order_id), order))
-    log(ARC28Event("end_execute_order(int,address)", itob(order_id), Txn.Sender))
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # If all amount is filled, delete the order.
     if order.amount == order.filled_amount:
@@ -264,6 +277,13 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     end
 
     return
+end
+
+
+func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
+    bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount)
+    int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER))
+    return minimum_amount
 end
 
 
@@ -295,18 +315,24 @@ func check_received_asset(txn_index: int, receiver: bytes, asset_id: int, amount
 end
 
 
-func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int):
+func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int) int:
+    int received_amount
     if !asset_id:
         assert(Gtxn[txn_index].TypeEnum == Pay)
         assert(Gtxn[txn_index].Receiver == receiver)
         assert(Gtxn[txn_index].Amount >= minimum_amount)
+
+        received_amount = Gtxn[txn_index].Amount
     else:
         assert(Gtxn[txn_index].TypeEnum == Axfer)
         assert(Gtxn[txn_index].AssetReceiver == receiver)
         assert(Gtxn[txn_index].XferAsset == asset_id)
         assert(Gtxn[txn_index].AssetAmount >= minimum_amount)
+
+        received_amount = Gtxn[txn_index].AssetAmount
     end
-    return
+
+    return received_amount
 end
 
 

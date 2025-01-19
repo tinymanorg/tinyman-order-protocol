@@ -28,7 +28,7 @@ class OrderingClient(BaseClient):
         self.current_timestamp = None
         self.simulate = False
 
-    def get_registry_entry_box_name(user_address: str) -> bytes:
+    def get_registry_entry_box_name(self, user_address: str) -> bytes:
         return b"e" + decode_address(user_address)
 
     def create_order_app(self):
@@ -48,7 +48,7 @@ class OrderingClient(BaseClient):
             ) if new_boxes else None,
             transaction.ApplicationCreateTxn(
                 sender=self.user_address,
-                sp=self.sp,
+                sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
                 app_args=[b"create_application", decode_address(self.registry_application_address)],
                 approval_program=order_approval_program.bytecode,
@@ -77,7 +77,7 @@ class OrderingClient(BaseClient):
     def get_order_box_name(id: int):
         return b"o" + int_to_bytes(id)
 
-    def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_rate: int, is_partial_allowed: bool, expiration_timestamp: int, order_id: int=None):
+    def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, expiration_timestamp: int, order_id: int=None):
         sp = self.get_suggested_params()
 
         if order_id is None:
@@ -119,7 +119,7 @@ class OrderingClient(BaseClient):
                     int_to_bytes(asset_id),
                     int_to_bytes(amount),
                     int_to_bytes(target_asset_id),
-                    int_to_bytes(target_rate),
+                    int_to_bytes(target_amount),
                     int_to_bytes(int(is_partial_allowed)),
                     int_to_bytes(expiration_timestamp)
                 ],
