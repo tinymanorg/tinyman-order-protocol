@@ -14,6 +14,7 @@ end
 
 # Global State
 
+const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
@@ -28,6 +29,7 @@ router:
     init
     propose_manager
     accept_manager
+    set_order_fee_rate
     create_entry
 end
 
@@ -86,6 +88,17 @@ func accept_manager():
 end
 
 
+@public()
+func set_order_fee_rate(fee_rate: int):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    app_global_put(ORDER_FEE_RATE_KEY, fee_rate)
+
+    log(ARC28Event("set_order_fee_rate(uint64)", itob(fee_rate)))
+    return
+end
+
+
 # Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
 # Permission: Anyone
 @public()
@@ -97,6 +110,7 @@ func create_entry():
     assert(Gtxn[app_creation_index].TypeEnum == Appl)
     assert(Gtxn[app_creation_index].OnCompletion == NoOp)
     assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
+    assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
 
     bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram)
     assert(approval_hash == ORDER_APP_HASH)
