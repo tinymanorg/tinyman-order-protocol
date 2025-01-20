@@ -12,8 +12,9 @@ struct Order:
     amount: int
     target_asset_id: int
     target_amount: int
-    # Filling fields.
+    # Partial Filling.
     filled_amount: int
+    collected_target_amount: int
     is_partial_allowed: int
     creation_timestamp: int
     expiration_timestamp: int
@@ -22,10 +23,15 @@ end
 
 # Global State
 
+const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
+const bytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY = "registry_app_account_address"
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
+
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
+
+const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 
 # Math Constants
 
@@ -44,17 +50,23 @@ router:
     cancel_order
     start_execute_order
     end_execute_order
+    collect
 end
 
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(manager_address: bytes[32]):
+func create_application(registry_app_id: int, manager_address: bytes[32]):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
     app_global_put(MANAGER_KEY, manager_address)
 
-    # create_application(manager_address)
-    log(ARC28Event("create_application(address)", manager_address))
+    app_global_put(REGISTRY_APP_ID_KEY, registry_app_id)
+    bytes registry_app_account_address 
+    _, registry_app_account_address = app_params_get(AppAddress, registry_app_id)
+    app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
+
+    # create_application(user_address,manager_address,registry_app_id)
+    log(ARC28Event("create_application(address,address,uint64)", Txn.Sender, manager_address, itob(registry_app_id)))
     return
 end
 
@@ -181,7 +193,7 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_order(uint64)", itob(order_id)))
 
     # Delete the box.
@@ -261,20 +273,54 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
         minimum_amount = calculate_minimum_amount(order.amount, order.target_amount, fill_amount)
     end
 
-    int received_amount = check_received_target_asset(Txn.GroupIndex - 1, user_address, order.target_asset_id, minimum_amount)
+    int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, minimum_amount)
 
     order.filled_amount = order.filled_amount + fill_amount
+    order.collected_target_amount = order.collected_target_amount + received_amount
 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
-    # If all amount is filled, delete the order.
+    # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
+    # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
+    # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
     if order.amount == order.filled_amount:
+        int fee_amount = calculate_fee_amount(order.collected_target_amount)
+
+        transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+        transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
         _ = box_del(order)
     end
+
+    return
+end
+
+
+@public()
+func collect(order_id: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+
+    assert(order.collected_target_amount)
+
+    int fee_amount = calculate_fee_amount(order.collected_target_amount)
+    assert(fee_amount)
+
+    transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+
+    int collected_target_amount = order.collected_target_amount
+    order.collected_target_amount = 0
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
 
     return
 end
@@ -284,6 +330,15 @@ func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int)
     bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount)
     int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER))
     return minimum_amount
+end
+
+
+func calculate_fee_amount(target_amount: int) int:
+    int fee_amount
+    int fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY), int)
+
+    fee_amount = (target_amount * fee_rate) / 10000
+    return fee_amount
 end
 
 
