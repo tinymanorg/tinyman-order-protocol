@@ -14,12 +14,12 @@ end
 
 # Global State
 
-const bytes ENTRY_COUNT_KEY = "order_count"
+const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0x00
+const bytes ORDER_APP_HASH = 0x8e3de033e55ab9b365c62adca97fcae8eb8be3468d79e9fc5ac0920b7695d2a8
 
 
 router:
@@ -90,7 +90,7 @@ end
 # Permission: Anyone
 @public()
 func create_entry():
-    box<Entry> entry = CreateBox(Txn.Sender)
+    box<Entry> entry = CreateBox(Concat("e", Txn.Sender))
 
     int app_creation_index = Txn.GroupIndex - 1
     assert(Gtxn[app_creation_index].Sender == Txn.Sender)
@@ -107,7 +107,7 @@ func create_entry():
     app_global_put(ENTRY_COUNT_KEY, entry_count + 1)
 
     # Logs
-    log(ARC28Event("entry(address,int)", Txn.Sender, entry))
+    log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
 
     return
 end
