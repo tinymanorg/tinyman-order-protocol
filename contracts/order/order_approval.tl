@@ -123,7 +123,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     assert(Txn.Sender == user_address)
 
     int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
-    box<Order> order = CreateBox(itob(total_order_count))
+    box<Order> order = CreateBox(Concat("o", itob(total_order_count)))
 
     # Assertions
     assert(amount > 0)
@@ -132,9 +132,9 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     assert(expiration_timestamp > Global.LatestTimestamp)
 
     # TODO: Should app receive the asset?
-    int is_opted_in_to_target
-    is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
-    assert(is_opted_in_to_target)
+    # int is_opted_in_to_target
+    # is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
+    # assert(is_opted_in_to_target)
 
     check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
 
@@ -152,7 +152,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_order(uint64)", itob(total_order_count)))
 
     return
@@ -166,7 +166,7 @@ func cancel_order(order_id: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
-    box<Order> order = OpenBox(itob(order_id))
+    box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
     # It is assumed that the order is deleted once it is executed.
     # Send remaining amount back to user.
@@ -181,7 +181,7 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_order(uint64)", itob(order_id)))
 
     # Delete the box.
@@ -196,7 +196,7 @@ end
 # Permission: Everyone
 @public()
 func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
-    box<Order> order = OpenBox(itob(order_id))
+    box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
     # Assertions
     assert(index_diff > 2)
@@ -238,7 +238,7 @@ end
 @public()
 func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    box<Order> order = OpenBox(itob(order_id))
+    box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
 
@@ -268,7 +268,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # If all amount is filled, delete the order.
