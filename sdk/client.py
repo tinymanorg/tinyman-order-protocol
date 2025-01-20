@@ -72,9 +72,9 @@ class OrderingClient(BaseClient):
         return self._submit(transactions, additional_fees=0)
 
     def get_order_count(self):
-        self.get_global(TOTAL_ORDER_COUNT_KEY, 0, self.app_id)
+        return self.get_global(TOTAL_ORDER_COUNT_KEY, 0, self.app_id)
     
-    def get_order_box_name(id: int):
+    def get_order_box_name(self, id: int):
         return b"o" + int_to_bytes(id)
 
     def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, expiration_timestamp: int, order_id: int=None):
@@ -93,7 +93,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 receiver=self.application_address,
-                amt=self.calculate_min_balance(boxes=new_boxes)
+                amt=self.calculate_min_balance(boxes=new_boxes, assets=1)
             ) if new_boxes else None,
             # Asset Transfer
             transaction.PaymentTxn(
@@ -135,7 +135,8 @@ class OrderingClient(BaseClient):
         sp = self.get_suggested_params()
 
         order_box_name = self.get_order_box_name(order_id)
-        
+        order = self.get_box(order_box_name, "Order")
+
         transactions = [
             transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -149,10 +150,11 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name),
                 ],
+                foreign_assets=[order.asset_id]
             )
         ]
 
-        return self._submit(transactions, additional_fees=0)
+        return self._submit(transactions, additional_fees=1)
 
     def prepare_start_execute_order_transaction(self, order_id: int, fill_amount: int, index_diff: int, sp, account_address: str=None):
         order_box_name = self.get_order_box_name(order_id)
