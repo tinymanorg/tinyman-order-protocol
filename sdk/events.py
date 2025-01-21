@@ -24,6 +24,7 @@ order_event = Event(
         abi.Argument(arg_type="uint64", name="target_asset_id"),
         abi.Argument(arg_type="uint64", name="target_amount"),
         abi.Argument(arg_type="uint64", name="filled_amount"),
+        abi.Argument(arg_type="uint64", name="collected_target_amount"),
         abi.Argument(arg_type="uint64", name="is_partial_allowed"),
         abi.Argument(arg_type="uint64", name="creation_timestamp"),
         abi.Argument(arg_type="uint64", name="expiration_timestamp")

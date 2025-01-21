@@ -1,7 +1,7 @@
 {
   "structs": {
     "Order": {
-      "size": 64,
+      "size": 72,
       "fields": {
         "asset_id": {
           "type": "int",
@@ -28,20 +28,25 @@
           "size": 8,
           "offset": 32
         },
-        "is_partial_allowed": {
+        "collected_target_amount": {
           "type": "int",
           "size": 8,
           "offset": 40
         },
-        "creation_timestamp": {
+        "is_partial_allowed": {
           "type": "int",
           "size": 8,
           "offset": 48
         },
-        "expiration_timestamp": {
+        "creation_timestamp": {
           "type": "int",
           "size": 8,
           "offset": 56
+        },
+        "expiration_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 64
         }
       }
     }

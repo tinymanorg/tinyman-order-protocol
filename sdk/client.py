@@ -50,7 +50,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
-                app_args=[b"create_application", decode_address(self.registry_application_address)],
+                app_args=[b"create_application", self.registry_app_id, decode_address(self.registry_application_address)],
                 approval_program=order_approval_program.bytecode,
                 clear_program=order_clear_state_program.bytecode,
                 global_schema=order_app_global_schema,
@@ -150,7 +150,8 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name),
                 ],
-                foreign_assets=[order.asset_id]
+                foreign_assets=[order.asset_id],
+                foreign_apps=[self.registry_app_id]
             )
         ]
 
@@ -158,6 +159,7 @@ class OrderingClient(BaseClient):
 
     def prepare_start_execute_order_transaction(self, order_id: int, fill_amount: int, index_diff: int, sp, account_address: str=None):
         order_box_name = self.get_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order")
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -173,12 +175,14 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name),
                 ],
+                foreign_assets=[order.target_asset_id]
             )
 
         return txn
 
     def prepare_end_execute_order_transaction(self, order_id: int, fill_amount: int, index_diff: int, sp, account_address: str=None):
         order_box_name = self.get_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order")
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -194,6 +198,8 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name),
                 ],
+                foreign_apps=[self.registry_app_id],
+                foreign_assets=[order.asset_id]
             )
 
         return txn
