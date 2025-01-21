@@ -164,7 +164,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_order(uint64)", itob(total_order_count)))
 
     return
