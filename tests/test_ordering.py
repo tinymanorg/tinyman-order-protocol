@@ -53,6 +53,8 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.assertDictEqual(
             self.ledger.global_states[order_app_id],
             {
+                REGISTRY_APP_ID_KEY: self.registry_app_id,
+                REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
                 MANAGER_KEY: decode_address(self.register_application_address),
                 USER_ADDRESS_KEY: decode_address(self.user_address)
             }
@@ -109,6 +111,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
         self.assertEqual(order_event['target_amount'], 15_000)
         self.assertEqual(order_event['filled_amount'], 0)
+        self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 0)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
@@ -121,6 +124,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
         self.assertEqual(order.target_amount, 15_000)
         self.assertEqual(order.filled_amount, 0)
+        self.assertEqual(order.collected_target_amount, 0)
         self.assertEqual(order.is_partial_allowed, 0)
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
@@ -166,6 +170,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
         self.assertEqual(order_event['target_amount'], 15_000)
         self.assertEqual(order_event['filled_amount'], 0)
+        self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 1)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
@@ -178,6 +183,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
         self.assertEqual(order.target_amount, 15_000)
         self.assertEqual(order.filled_amount, 0)
+        self.assertEqual(order.collected_target_amount, 0)
         self.assertEqual(order.is_partial_allowed, 1)
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
@@ -254,6 +260,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
         self.assertEqual(order_event['target_amount'], 15_000)
         self.assertEqual(order_event['filled_amount'], 0)
+        self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 0)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
@@ -321,6 +328,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
         self.assertEqual(order_event['target_amount'], 15_000)
         self.assertEqual(order_event['filled_amount'], 10_000)
+        self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 1)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
