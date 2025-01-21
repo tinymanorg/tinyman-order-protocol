@@ -172,6 +172,7 @@ end
 
 
 # Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
+# Prerequisites: If partial filling is utilized, collect method must be called before.
 # Permission: App owner (User)
 @public()
 func cancel_order(order_id: int):
@@ -187,6 +188,8 @@ func cancel_order(order_id: int):
     if order.is_partial_allowed:
         remaining_amount = remaining_amount - order.filled_amount
     end
+
+    assert(!order.collected_target_amount)
 
     transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
 
