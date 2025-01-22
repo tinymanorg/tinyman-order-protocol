@@ -71,8 +71,8 @@ func create_application(registry_app_id: int, vault_app_id: int, manager_address
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
 
-    # create_application(user_address,manager_address,registry_app_id)
-    log(ARC28Event("create_application(address,address,uint64)", Txn.Sender, manager_address, itob(registry_app_id)))
+    # create_application(user_address,registry_app_id,vault_app_id,manager_address)
+    log(ARC28Event("create_application(address,uint64,uint64,address)", Txn.Sender, itob(registry_app_id), itob(vault_app_id), manager_address))
     return
 end
 
