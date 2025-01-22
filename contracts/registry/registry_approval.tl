@@ -14,13 +14,16 @@ end
 
 # Global State
 
+const bytes VAULT_APP_ID_KEY = "vault_app_id"
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
+const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
+const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
 const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0xb221edc20fa5285b32fc551e5fa3188b1ee61ce6af321330525aa31a2d86872a
+const bytes ORDER_APP_HASH = 0xc96c6d908dbf1f533bb494fc33320b5a7a6612a9c0d2469eab626f437eb50eed
 
 
 router:
@@ -30,17 +33,22 @@ router:
     propose_manager
     accept_manager
     set_order_fee_rate
+    set_governor_order_fee_rate
+    set_governor_fee_rate_power_threshold
     create_entry
 end
 
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(manager_address: bytes[32]):
+func create_application(vault_app_id: int, manager_address: bytes[32]):
     app_global_put(MANAGER_KEY, manager_address)
+    app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+    app_global_put(ORDER_FEE_RATE_KEY, 30)
+    app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 15)
 
-    # create_application(manager_address)
-    log(ARC28Event("create_application(address)", manager_address))
+    # create_application(vault_app_id,manager_address)
+    log(ARC28Event("create_application(uint64,address)", itob(vault_app_id), manager_address))
     return
 end
 
@@ -99,6 +107,28 @@ func set_order_fee_rate(fee_rate: int):
 end
 
 
+@public()
+func set_governor_order_fee_rate(fee_rate: int):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, fee_rate)
+
+    log(ARC28Event("set_governor_order_fee_rate(uint64)", itob(fee_rate)))
+    return
+end
+
+
+@public()
+func set_governor_fee_rate_power_threshold(threshold: int):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, threshold)
+
+    log(ARC28Event("set_governor_fee_rate_power_threshold(uint64)", itob(threshold)))
+    return
+end
+
+
 # Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
 # Permission: Anyone
 @public()
@@ -111,6 +141,7 @@ func create_entry():
     assert(Gtxn[app_creation_index].OnCompletion == NoOp)
     assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
     assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
+    assert(Gtxn[app_creation_index].ApplicationArgs[2] == itob(app_global_get(VAULT_APP_ID_KEY)))
 
     bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram)
     assert(approval_hash == ORDER_APP_HASH)
