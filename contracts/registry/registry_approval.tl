@@ -23,7 +23,7 @@ const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0xc96c6d908dbf1f533bb494fc33320b5a7a6612a9c0d2469eab626f437eb50eed
+const bytes ORDER_APP_HASH = 0x24948639b7da1b6d677ba8c9cc0b2e24fc4c064f5ec5c8b815b27317e302d958
 
 
 router:
@@ -46,6 +46,7 @@ func create_application(vault_app_id: int, manager_address: bytes[32]):
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
     app_global_put(ORDER_FEE_RATE_KEY, 30)
     app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 15)
+    app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 500_000_000)
 
     # create_application(vault_app_id,manager_address)
     log(ARC28Event("create_application(uint64,address)", itob(vault_app_id), manager_address))
