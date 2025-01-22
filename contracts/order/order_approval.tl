@@ -25,6 +25,11 @@ end
 
 const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
 const bytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY = "registry_app_account_address"
+const bytes VAULT_APP_ID_KEY = "vault_app_id"
+const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
+const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
+const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
+
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
 
@@ -56,7 +61,7 @@ end
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(registry_app_id: int, manager_address: bytes[32]):
+func create_application(registry_app_id: int, vault_app_id: int, manager_address: bytes[32]):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
     app_global_put(MANAGER_KEY, manager_address)
 
@@ -64,6 +69,7 @@ func create_application(registry_app_id: int, manager_address: bytes[32]):
     bytes registry_app_account_address 
     _, registry_app_account_address = app_params_get(AppAddress, registry_app_id)
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
+    app_global_put(VAULT_APP_ID_KEY, vault_app_id)
 
     # create_application(user_address,manager_address,registry_app_id)
     log(ARC28Event("create_application(address,address,uint64)", Txn.Sender, manager_address, itob(registry_app_id)))
@@ -337,11 +343,31 @@ end
 
 
 func calculate_fee_amount(target_amount: int) int:
-    int fee_amount
-    int fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY), int)
+    int fee_rate
+    int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes))
+    int fee_rate_power_threshold = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD), int)
 
-    fee_amount = (target_amount * fee_rate) / 10000
+    if account_voting_power > fee_rate_power_threshold:
+        fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY), int)
+    else:
+        fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY), int)
+    end
+
+    int fee_amount = (target_amount * fee_rate) / 10000
     return fee_amount
+end
+
+
+func get_account_voting_power(address: bytes) int:
+    inner_txn:
+        TypeEnum: Appl
+        ApplicationID: app_global_get(VAULT_APP_ID_KEY)
+        ApplicationArgs[0]: "get_tiny_power_of"
+        ApplicationArgs[1]: address
+        Fee: 0
+    end
+    int voting_power = extract_uint64(Itxn.LastLog, 4)
+    return voting_power
 end
 
 
