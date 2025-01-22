@@ -64,13 +64,14 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         )
 
         # Set up vault.
-        # self.ledger.create_app(app_id=self.vault_app_id, approval_program=vault_approval_program, creator=self.app_creator_address, local_ints=0, local_bytes=0, global_ints=4, global_bytes=0)
-        # self.ledger.set_global_state(self.vault_app_id, {"tiny_asset_id": self.tiny_asset_id, "total_locked_amount": 0, "total_power_count": 0, "last_total_power_timestamp": 0})
-        # self.ledger.set_account_balance(get_application_address(self.vault_app_id), 300_000)
-        # self.ledger.boxes[self.vault_app_id] = {}
+        self.vault_app_id = 1003
+        self.ledger.create_app(app_id=self.vault_app_id, approval_program=vault_approval_program, creator=self.app_creator_address, local_ints=0, local_bytes=0, global_ints=4, global_bytes=0)
+        self.ledger.set_global_state(self.vault_app_id, {"tiny_asset_id": self.tiny_asset_id, "total_locked_amount": 0, "total_power_count": 0, "last_total_power_timestamp": 0})
+        self.ledger.set_account_balance(get_application_address(self.vault_app_id), 300_000)
+        self.ledger.boxes[self.vault_app_id] = {}
 
         self.algod = JigAlgod(self.ledger)
-        self.ordering_client = OrderingClient(self.algod, self.registry_app_id, self.user_address, self.user_sk)
+        self.ordering_client = OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.user_address, self.user_sk)
 
     def create_registry_app(self, app_id, app_creator_address):
         self.ledger.create_app(
@@ -86,8 +87,12 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.set_global_state(
             app_id,
             {
-                ENTRY_COUNT_KEY: 0,
                 MANAGER_KEY: decode_address(self.manager_address),
+                VAULT_APP_ID_KEY: self.vault_app_id,
+                ORDER_FEE_RATE_KEY: 30,
+                GOVERNOR_ORDER_FEE_RATE_KEY: 15,
+                GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
+                ENTRY_COUNT_KEY: 0,
             }
         )
 
@@ -106,8 +111,11 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         )
 
         self.ledger.global_states[app_id] = {
+            USER_ADDRESS_KEY: decode_address(app_creator_address),
             MANAGER_KEY: decode_address(self.register_application_address),
-            USER_ADDRESS_KEY: decode_address(app_creator_address)
+            REGISTRY_APP_ID_KEY: self.registry_app_id,
+            REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
+            VAULT_APP_ID_KEY: self.vault_app_id,
         }
 
         # Register the app.
@@ -118,4 +126,20 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.set_box(self.registry_app_id, key=entry_box_name, value=entry._data)
         self.ledger.global_states[self.registry_app_id][ENTRY_COUNT_KEY] = self.ledger.global_states[self.registry_app_id].get(ENTRY_COUNT_KEY, 0) + 1
 
-        return OrderingClient(self.algod, self.registry_app_id, self.user_address, self.user_sk, app_id)
+        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.user_address, self.user_sk, self.app_id)
+
+    def simulate_user_voting_power(self, account_address=None, locked_amount=510_000_000, lock_start_time = None, lock_end_time=None):
+        """
+        For MAX_LOCK_TIME, locked_amount is equivalent to voting power. Added +10_000_000 microunits for rounding errors and keeping the power enough over a time span.
+        """
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        lock_start_time = lock_start_time or now
+        lock_end_time = lock_end_time or (lock_start_time + MAX_LOCK_TIME)
+        assert(lock_start_time < lock_end_time)
+
+        account_address = account_address or self.user_address
+        account_state = int_to_bytes(locked_amount) + int_to_bytes(lock_end_time) + int_to_bytes(1) + int_to_bytes(0)
+
+        self.ledger.set_box(self.vault_app_id, key=decode_address(account_address), value=account_state)

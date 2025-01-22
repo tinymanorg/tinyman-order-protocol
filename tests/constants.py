@@ -8,6 +8,10 @@ registry_clear_state_program = TealishProgram('contracts/registry/registry_clear
 order_approval_program = TealishProgram('contracts/order/order_approval.tl')
 order_clear_state_program = TealishProgram('contracts/order/order_clear_state.tl')
 
+# Added for test dependency.
+vault_approval_program = TealishProgram("tests/vault/vault_approval.tl")
+vault_clear_state_program = TealishProgram("tests/vault/vault_clear_state.tl")
+
 # App Creation Config
 order_app_global_schema = transaction.StateSchema(num_uints=16, num_byte_slices=16)
 order_app_local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)

@@ -35,7 +35,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
                 sender=account_address,
                 sp=self.sp,
                 on_complete=OnComplete.NoOpOC,
-                app_args=[b"create_application", decode_address(self.manager_address)],
+                app_args=[b"create_application", self.vault_app_id, decode_address(self.manager_address)],
                 approval_program=registry_approval_program.bytecode,
                 clear_program=registry_clear_state_program.bytecode,
                 global_schema=registry_app_global_schema,
@@ -54,6 +54,10 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
             self.ledger.global_states[app_id],
             {
                 MANAGER_KEY: decode_address(self.manager_address),
+                VAULT_APP_ID_KEY: self.vault_app_id,
+                ORDER_FEE_RATE_KEY: 30,
+                GOVERNOR_ORDER_FEE_RATE_KEY: 15,
+                GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
             }
         )
 

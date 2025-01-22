@@ -53,10 +53,11 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.assertDictEqual(
             self.ledger.global_states[order_app_id],
             {
+                USER_ADDRESS_KEY: decode_address(self.user_address),
+                MANAGER_KEY: decode_address(self.register_application_address),
                 REGISTRY_APP_ID_KEY: self.registry_app_id,
                 REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
-                MANAGER_KEY: decode_address(self.register_application_address),
-                USER_ADDRESS_KEY: decode_address(self.user_address)
+                VAULT_APP_ID_KEY: self.vault_app_id,
             }
         )
 
