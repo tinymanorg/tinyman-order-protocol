@@ -16,10 +16,12 @@ from tests.constants import order_approval_program, order_clear_state_program, o
 
 
 class OrderingClient(BaseClient):
-    def __init__(self, algod, registry_app_id, user_address, user_sk, order_app_id=None) -> None:
+    def __init__(self, algod, registry_app_id, vault_app_id, user_address, user_sk, order_app_id=None) -> None:
         self.algod = algod
         self.registry_app_id = registry_app_id
         self.registry_application_address = get_application_address(registry_app_id)
+        self.vault_app_id = vault_app_id
+        self.vault_application_address = get_application_address(vault_app_id)
         self.app_id = order_app_id
         self.application_address = get_application_address(self.app_id) if self.app_id else None
         self.user_address = user_address
@@ -50,7 +52,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
-                app_args=[b"create_application", self.registry_app_id, decode_address(self.registry_application_address)],
+                app_args=[b"create_application", self.registry_app_id, self.vault_app_id, decode_address(self.registry_application_address)],
                 approval_program=order_approval_program.bytecode,
                 clear_program=order_clear_state_program.bytecode,
                 global_schema=order_app_global_schema,
@@ -197,8 +199,9 @@ class OrderingClient(BaseClient):
                 ],
                 boxes=[
                     (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address))
                 ],
-                foreign_apps=[self.registry_app_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
                 foreign_assets=[order.asset_id]
             )
 
