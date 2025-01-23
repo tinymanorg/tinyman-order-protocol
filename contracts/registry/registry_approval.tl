@@ -23,7 +23,7 @@ const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0x24948639b7da1b6d677ba8c9cc0b2e24fc4c064f5ec5c8b815b27317e302d958
+const bytes ORDER_APP_HASH = 0x07847d0dd38a405ecef2fc2d40ea28f89359831973497e586b54acb83d2a9e10
 
 
 router:

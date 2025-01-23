@@ -149,10 +149,9 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     assert(asset_id != target_asset_id)
     assert(expiration_timestamp > Global.LatestTimestamp)
 
-    # TODO: Should app receive the asset?
-    # int is_opted_in_to_target
-    # is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
-    # assert(is_opted_in_to_target)
+    int is_opted_in_to_target
+    is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
+    assert(is_opted_in_to_target)
 
     check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
 

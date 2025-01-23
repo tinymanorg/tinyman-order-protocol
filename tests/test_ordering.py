@@ -82,7 +82,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
         # Put Order
-        # self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
@@ -141,7 +141,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
         # Put Order
-        # self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
@@ -228,7 +228,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
         # Put Order
-        # self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
@@ -289,7 +289,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
         # Put Order
-        # self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
@@ -345,6 +345,9 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.user_address))
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 90_000)
+
+    def test_cancel_order_partial_filled_fail(self):
+        pass
 
     def test_cancel_order_non_user_fail(self):
         pass

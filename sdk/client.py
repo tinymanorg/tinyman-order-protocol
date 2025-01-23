@@ -125,6 +125,7 @@ class OrderingClient(BaseClient):
                     int_to_bytes(int(is_partial_allowed)),
                     int_to_bytes(expiration_timestamp)
                 ],
+                foreign_assets=[target_asset_id],
                 boxes=[
                     (0, order_box_name),
                 ],
@@ -159,7 +160,16 @@ class OrderingClient(BaseClient):
 
         return self._submit(transactions, additional_fees=1)
 
-    def prepare_start_execute_order_transaction(self, order_id: int, fill_amount: int, index_diff: int, sp, account_address: str=None):
+    def prepare_start_execute_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+        """
+        It is assumed that the caller of this method is a filler.
+
+        Parameters
+        ----------
+        order_app_id : Id of the account's order app that will be filled.
+        account_address : Account whom its order will be filled.
+        """
+
         order_box_name = self.get_order_box_name(order_id)
         order = self.get_box(order_box_name, "Order")
 
@@ -167,7 +177,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
                 sp=sp,
-                index=self.app_id,
+                index=order_app_id,
                 app_args=[
                     "start_execute_order",
                     int_to_bytes(order_id),
@@ -177,12 +187,22 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name),
                 ],
+                accounts=[account_address],
                 foreign_assets=[order.target_asset_id]
             )
 
         return txn
 
-    def prepare_end_execute_order_transaction(self, order_id: int, fill_amount: int, index_diff: int, sp, account_address: str=None):
+    def prepare_end_execute_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+        """
+        It is assumed that the caller of this method is a filler.
+
+        Parameters
+        ----------
+        order_app_id : Id of the account's order app that will be filled.
+        account_address : Account whom its order will be filled.
+        """
+
         order_box_name = self.get_order_box_name(order_id)
         order = self.get_box(order_box_name, "Order")
 
@@ -190,7 +210,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
                 sp=sp,
-                index=self.app_id,
+                index=order_app_id,
                 app_args=[
                     "end_execute_order",
                     int_to_bytes(order_id),
@@ -201,6 +221,7 @@ class OrderingClient(BaseClient):
                     (0, order_box_name),
                     (self.vault_app_id, decode_address(self.user_address))
                 ],
+                accounts=[account_address],
                 foreign_apps=[self.registry_app_id, self.vault_app_id],
                 foreign_assets=[order.asset_id]
             )
