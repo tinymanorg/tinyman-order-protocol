@@ -23,7 +23,7 @@ const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0xa89ee97b4850a2d70064cdcc989f9ad7c46f076f244b87fac98785f540d4c31b
+const bytes ORDER_APP_HASH = 0x466fd4923127a57906a7ab6f91aab39a0f745c70b1b870a573a9bc806d2459a8
 
 
 router:
@@ -35,6 +35,7 @@ router:
     set_order_fee_rate
     set_governor_order_fee_rate
     set_governor_fee_rate_power_threshold
+    claim_fees
     create_entry
 end
 
@@ -130,6 +131,31 @@ func set_governor_fee_rate_power_threshold(threshold: int):
 end
 
 
+@public()
+func claim_fees(asset_id: int):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    int opted_in
+    int asset_balance
+
+    if asset_id:
+        opted_in, asset_balance = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        assert(opted_in)
+    else:
+        asset_balance = balance(Global.CurrentApplicationAddress)
+
+        int minimum_balance = min_balance(Global.CurrentApplicationAddress)
+        asset_balance = asset_balance - minimum_balance
+    end
+
+    assert(asset_balance)
+    transfer(asset_id, asset_balance, Global.CurrentApplicationAddress, app_global_get(MANAGER_KEY))
+
+    log(ARC28Event("claim_fees(uint64,uint64)", itob(asset_id), itob(asset_balance)))
+    return
+end
+
+
 # Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
 # Permission: Anyone
 @public()
@@ -155,5 +181,28 @@ func create_entry():
     # Logs
     log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
 
+    return
+end
+
+
+func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+    if !asset_id:
+        inner_txn:
+            TypeEnum: Pay
+            Sender: sender
+            Receiver: receiver
+            Amount: amount
+            Fee: 0
+        end
+    else:
+        inner_txn:
+            TypeEnum: Axfer
+            Sender: sender
+            AssetReceiver: receiver
+            AssetAmount: amount
+            XferAsset: asset_id
+            Fee: 0
+        end
+    end
     return
 end
