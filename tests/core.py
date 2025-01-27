@@ -143,3 +143,16 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         account_state = int_to_bytes(locked_amount) + int_to_bytes(lock_end_time) + int_to_bytes(1) + int_to_bytes(0)
 
         self.ledger.set_box(self.vault_app_id, key=decode_address(account_address), value=account_state)
+
+    def get_new_ordering_client(self, user_sk, user_address):
+        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, user_address, user_sk)
+
+    def get_new_user(self):
+        user_sk, user_address = generate_account()
+        self.ledger.set_account_balance(user_address, 100_000_000)
+
+        return user_sk, user_address
+
+    def get_new_user_client(self):
+        user_sk, user_address = self.get_new_user()
+        return self.get_new_ordering_client(user_sk, user_address)

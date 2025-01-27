@@ -173,7 +173,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order")
+        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -190,7 +190,7 @@ class OrderingClient(BaseClient):
                     (0, order_box_name),
                 ],
                 accounts=[account_address],
-                foreign_assets=[order.target_asset_id]
+                foreign_assets=[order.asset_id]
             )
 
         return txn
@@ -206,7 +206,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order")
+        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -222,9 +222,9 @@ class OrderingClient(BaseClient):
                 boxes=[
                     (0, order_box_name)
                 ],
-                accounts=[account_address],
+                accounts=[account_address, self.registry_application_address],
                 foreign_apps=[self.registry_app_id],
-                foreign_assets=[order.asset_id]
+                foreign_assets=[order.target_asset_id]
             )
 
         return txn

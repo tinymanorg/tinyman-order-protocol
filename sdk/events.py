@@ -49,6 +49,26 @@ cancel_order_event = Event(
 )
 
 
+start_execute_order_event = Event(
+    name="start_execute_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="address", name="filler_address"),
+    ]
+)
+
+
+end_execute_order_event = Event(
+    name="end_execute_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="address", name="filler_address"),
+        abi.Argument(arg_type="uint64", name="fill_amount"),
+        abi.Argument(arg_type="uint64", name="bought_amount"),
+    ]
+)
+
+
 registry_events = [
     entry_event
 ]
@@ -57,5 +77,7 @@ registry_events = [
 ordering_events = [
     order_event,
     put_order_event,
-    cancel_order_event
+    cancel_order_event,
+    start_execute_order_event,
+    end_execute_order_event
 ]

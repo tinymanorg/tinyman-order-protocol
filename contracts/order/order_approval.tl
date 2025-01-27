@@ -224,7 +224,7 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
     # Assertions
-    assert(index_diff > 2)
+    assert(index_diff >= 2)
 
     # If partial filling is not allowed, executor should fill the whole order at once. Otherwise smaller amounts are allowed.
     int remaining_amount = order.amount
@@ -243,9 +243,10 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Gtxn[end_execute_order_txn_index].OnCompletion == NoOp)
     assert(Gtxn[end_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
     assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[0] == "end_execute_order")
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
     # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == fill_amount)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == index_diff)
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
 
     # Transfer `fill_amount` to executor.
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
@@ -273,9 +274,10 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Gtxn[start_execute_order_txn_index].OnCompletion == NoOp)
     assert(Gtxn[start_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
     assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[0] == "start_execute_order")
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
     # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == fill_amount)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == index_diff)
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
 
     # Assert that user received the target amount or more.
     # TODO: Review the calculations.
