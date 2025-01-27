@@ -126,13 +126,15 @@ class OrderingClient(BaseClient):
                     int_to_bytes(expiration_timestamp)
                 ],
                 foreign_assets=[target_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
                 boxes=[
                     (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address))
                 ],
             )
         ]
 
-        return self._submit(transactions, additional_fees=0)
+        return self._submit(transactions, additional_fees=1)
 
     def cancel_order(self, order_id: int):
         sp = self.get_suggested_params()
@@ -218,11 +220,10 @@ class OrderingClient(BaseClient):
                     int_to_bytes(index_diff)
                 ],
                 boxes=[
-                    (0, order_box_name),
-                    (self.vault_app_id, decode_address(self.user_address))
+                    (0, order_box_name)
                 ],
                 accounts=[account_address],
-                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                foreign_apps=[self.registry_app_id],
                 foreign_assets=[order.asset_id]
             )
 

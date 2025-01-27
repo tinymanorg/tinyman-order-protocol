@@ -114,6 +114,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['filled_amount'], 0)
         self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 0)
+        self.assertEqual(order_event['fee_rate'], 30)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
@@ -127,6 +128,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.filled_amount, 0)
         self.assertEqual(order.collected_target_amount, 0)
         self.assertEqual(order.is_partial_allowed, 0)
+        self.assertEqual(order.fee_rate, 30)
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
 
@@ -173,6 +175,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['filled_amount'], 0)
         self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 1)
+        self.assertEqual(order_event['fee_rate'], 30)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
@@ -186,6 +189,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.filled_amount, 0)
         self.assertEqual(order.collected_target_amount, 0)
         self.assertEqual(order.is_partial_allowed, 1)
+        self.assertEqual(order.fee_rate, 30)
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
 
@@ -263,6 +267,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['filled_amount'], 0)
         self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 0)
+        self.assertEqual(order_event['fee_rate'], 30)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
@@ -331,6 +336,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['filled_amount'], 10_000)
         self.assertEqual(order_event['collected_target_amount'], 0)
         self.assertEqual(order_event['is_partial_allowed'], 1)
+        self.assertEqual(order_event['fee_rate'], 30)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
@@ -363,7 +369,31 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, int(1e14))
     
     def test_execute_order_successful(self):
-        pass
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=False,
+            expiration_timestamp=now + DAY + 4 * WEEK
+        )
+
+        
 
     def test_execute_order_partial_successful(self):
         pass

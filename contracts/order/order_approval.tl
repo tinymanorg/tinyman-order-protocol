@@ -16,6 +16,7 @@ struct Order:
     filled_amount: int
     collected_target_amount: int
     is_partial_allowed: int
+    fee_rate: int
     creation_timestamp: int
     expiration_timestamp: int
 end
@@ -155,12 +156,16 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
 
     check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
 
+    int fee_rate = get_fee_rate()
+
     order.asset_id = asset_id
     order.amount = amount
     order.target_asset_id = target_asset_id
     order.target_amount = target_amount
-    order.is_partial_allowed = is_partial_allowed
     order.filled_amount = 0
+    order.collected_target_amount = 0
+    order.is_partial_allowed = is_partial_allowed
+    order.fee_rate = fee_rate
     order.creation_timestamp = Global.LatestTimestamp
     order.expiration_timestamp = expiration_timestamp
 
@@ -169,7 +174,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_order(uint64)", itob(total_order_count)))
 
     return
@@ -201,7 +206,7 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_order(uint64)", itob(order_id)))
 
     # Delete the box.
@@ -289,14 +294,14 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
     # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
     # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
     if order.amount == order.filled_amount:
-        int fee_amount = calculate_fee_amount(order.collected_target_amount)
+        int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
 
         transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
         transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
@@ -315,7 +320,7 @@ func collect(order_id: int):
 
     assert(order.collected_target_amount)
 
-    int fee_amount = calculate_fee_amount(order.collected_target_amount)
+    int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
     assert(fee_amount)
 
     transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
@@ -327,7 +332,7 @@ func collect(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
 
     return
@@ -341,19 +346,29 @@ func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int)
 end
 
 
-func calculate_fee_amount(target_amount: int) int:
-    int fee_rate
-    int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes))
-    int fee_rate_power_threshold = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD), int)
-
-    if account_voting_power > fee_rate_power_threshold:
-        fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY), int)
-    else:
-        fee_rate = UncheckedCast(app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY), int)
-    end
-
+func calculate_fee_amount(target_amount: int, fee_rate: int) int:
     int fee_amount = (target_amount * fee_rate) / 10000
     return fee_amount
+end
+
+
+func get_fee_rate() int:
+    bytes threshold_bytes
+    bytes fee_rate_bytes
+    int fee_rate
+
+    int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes))
+    _, threshold_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD)
+    int fee_rate_power_threshold = UncheckedCast(threshold_bytes, int)
+
+    if account_voting_power > fee_rate_power_threshold:
+        _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY)
+    else:
+        _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY)
+    end
+
+    fee_rate = UncheckedCast(fee_rate_bytes, int)
+    return fee_rate
 end
 
 

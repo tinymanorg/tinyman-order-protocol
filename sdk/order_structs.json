@@ -1,7 +1,7 @@
 {
   "structs": {
     "Order": {
-      "size": 72,
+      "size": 80,
       "fields": {
         "asset_id": {
           "type": "int",
@@ -38,15 +38,20 @@
           "size": 8,
           "offset": 48
         },
-        "creation_timestamp": {
+        "fee_rate": {
           "type": "int",
           "size": 8,
           "offset": 56
         },
-        "expiration_timestamp": {
+        "creation_timestamp": {
           "type": "int",
           "size": 8,
           "offset": 64
+        },
+        "expiration_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 72
         }
       }
     }
