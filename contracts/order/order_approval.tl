@@ -123,6 +123,9 @@ end
 
 @public()
 func asset_opt_in(asset_ids: int[8]):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
     # Required Algo to cover minimum balance increase must be supplied.
     # It is not checked explicitly.
     # Using extra balance is allowed.
