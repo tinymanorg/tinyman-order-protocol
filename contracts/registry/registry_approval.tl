@@ -23,7 +23,7 @@ const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
 # TODO
-const bytes ORDER_APP_HASH = 0x466fd4923127a57906a7ab6f91aab39a0f745c70b1b870a573a9bc806d2459a8
+const bytes ORDER_APP_HASH = 0x0123dff0a706f481b1831e818b0f206e8c62f22d9df010aabcf2a8f16c825591
 
 
 router:
@@ -32,6 +32,7 @@ router:
     init
     propose_manager
     accept_manager
+    asset_opt_in
     set_order_fee_rate
     set_governor_order_fee_rate
     set_governor_fee_rate_power_threshold
@@ -94,6 +95,22 @@ func accept_manager():
     app_global_put(MANAGER_KEY, proposed_manager)
     app_global_put(PROPOSED_MANAGER_KEY, "")
     log(ARC28Event("accept_manager(address)", proposed_manager))
+    return
+end
+
+
+# Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn.
+@public()
+func asset_opt_in(asset_id: int):
+    int is_opted_in = opt_in_to_asset_if_needed(asset_id)
+
+    if is_opted_in:
+        assert(Gtxn[-1].TypeEnum == Pay)
+        assert(Gtxn[-1].Receiver == Global.CurrentApplicationAddress)
+        # TODO: replace the hardcoded value with Global.AssetOptInMinBalance.
+        assert(Gtxn[-1].Amount >= 100000)
+    end
+
     return
 end
 
@@ -182,6 +199,20 @@ func create_entry():
     log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
 
     return
+end
+
+
+func opt_in_to_asset_if_needed(asset_id: int) int:
+    int is_opted_in
+
+    if asset_id:
+        is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+
+        if is_opted_in == 0:
+            transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+        end
+    end
+    return !is_opted_in
 end
 
 

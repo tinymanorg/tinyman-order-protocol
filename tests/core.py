@@ -10,7 +10,7 @@ from tinyman.utils import int_to_bytes, get_global_state
 from tinyman.governance.vault.constants import MAX_LOCK_TIME
 
 from sdk.constants import *
-from sdk.client import OrderingClient
+from sdk.client import OrderingClient, RegistryClient
 from sdk.structs import Entry, Order
 
 from tests.constants import *
@@ -72,6 +72,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
 
         self.algod = JigAlgod(self.ledger)
         self.ordering_client = OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.user_address, self.user_sk)
+        self.manager_client = RegistryClient(self.algod, self.registry_app_id, self.vault_app_id, self.manager_address, self.manager_sk)
 
     def create_registry_app(self, app_id, app_creator_address):
         self.ledger.create_app(
@@ -92,7 +93,6 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
-                ENTRY_COUNT_KEY: 0,
             }
         )
 
@@ -147,6 +147,9 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
     def get_new_ordering_client(self, user_sk, user_address):
         return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, user_address, user_sk)
 
+    def get_new_registry_client(self, user_sk, user_address):
+        return RegistryClient(self.algod, self.registry_app_id, self.vault_app_id, user_address, user_sk)
+
     def get_new_user(self):
         user_sk, user_address = generate_account()
         self.ledger.set_account_balance(user_address, 100_000_000)
@@ -156,3 +159,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
     def get_new_user_client(self):
         user_sk, user_address = self.get_new_user()
         return self.get_new_ordering_client(user_sk, user_address)
+
+    def get_new_manager_client(self):
+        user_sk, user_address = self.get_new_user()
+        return self.get_new_registry_client(user_sk, user_address)

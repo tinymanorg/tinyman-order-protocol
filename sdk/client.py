@@ -1,15 +1,17 @@
 from base64 import b64decode, b64encode
 from datetime import datetime, timezone
+from typing import List
 
 from algosdk.encoding import decode_address
-from tinyman.utils import TransactionGroup, int_to_bytes
 from algosdk import transaction
 from algosdk.encoding import decode_address
 from algosdk.logic import get_application_address
+from tinyman.utils import TransactionGroup, int_to_bytes
 
 from sdk.base_client import BaseClient
 from sdk.constants import *
 from sdk.structs import Order, Entry
+from sdk.utils import int_array
 
 # TODO: Later change these dependencies with the hardcoded ones.
 from tests.constants import order_approval_program, order_clear_state_program, order_app_global_schema, order_app_local_schema, order_app_extra_pages
@@ -72,6 +74,29 @@ class OrderingClient(BaseClient):
         ]
 
         return self._submit(transactions, additional_fees=0)
+
+    def asset_opt_in(self, asset_ids: List[int]):
+        sp = self.get_suggested_params()
+
+        asset_count = len(asset_ids)
+        asset_ids = int_array(asset_ids, 8, 0)
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=self.calculate_min_balance(assets=asset_count)
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["asset_opt_in", asset_ids],
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=asset_count)
 
     def get_order_count(self):
         return self.get_global(TOTAL_ORDER_COUNT_KEY, 0, self.app_id)
@@ -228,3 +253,133 @@ class OrderingClient(BaseClient):
             )
 
         return txn
+
+
+class RegistryClient(BaseClient):
+    def __init__(self, algod, registry_app_id, vault_app_id, user_address, user_sk) -> None:
+        self.algod = algod
+        self.app_id = registry_app_id
+        self.application_address = get_application_address(registry_app_id)
+        self.vault_app_id = vault_app_id
+        self.vault_application_address = get_application_address(vault_app_id)
+        self.user_address = user_address
+        self.keys = {}
+        self.add_key(user_address, user_sk)
+        self.current_timestamp = None
+        self.simulate = False
+
+    def get_registry_entry_box_name(self, user_address: str) -> bytes:
+        return b"e" + decode_address(user_address)
+
+    def propose_manager(self, new_manager_address):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["propose_manager", decode_address(new_manager_address)],
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def accept_manager(self):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["accept_manager"],
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def asset_opt_in(self, asset_id: int):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=self.calculate_min_balance(assets=1)
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["asset_opt_in", asset_id],
+                foreign_assets=[asset_id]
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=1)
+    
+    def set_order_fee_rate(self, fee_rate: int):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["set_order_fee_rate", fee_rate],
+            )
+        ]
+
+        return self._submit(transactions)
+    
+    def set_governor_order_fee_rate(self, fee_rate: int):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["set_governor_order_fee_rate", fee_rate],
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def set_governor_fee_rate_power_threshold(self, threshold: int):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["set_governor_fee_rate_power_threshold", threshold],
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def claim_fees(self, asset_id: int):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["claim_fees", asset_id],
+                foreign_assets=[asset_id]
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=1)
