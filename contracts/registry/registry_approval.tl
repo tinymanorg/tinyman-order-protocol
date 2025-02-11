@@ -1,5 +1,5 @@
 #pragma version 10
-#tealish version git+https://github.com/Hipo/tealish.git@f1c2b72aaeb586ed082c380a638ed2e7ca47bcae
+#tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
 
 # Tinyman Order Protocol Registry
 # License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE

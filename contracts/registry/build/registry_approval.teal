@@ -1,0 +1,602 @@
+#pragma version 10
+//tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
+
+// Tinyman Order Protocol Registry
+// License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE
+// Documentation: https://docs.tinyman.org
+
+
+// Name: e<user_address>
+
+
+// Global State
+
+#define VAULT_APP_ID_KEY "vault_app_id"
+#define ORDER_FEE_RATE_KEY "order_fee_rate"
+#define GOVERNOR_ORDER_FEE_RATE_KEY "governor_order_fee_rate"
+#define GOVERNOR_FEE_RATE_POWER_THRESHOLD "governor_fee_rate_power_threshold"
+#define ENTRY_COUNT_KEY "entry_count"
+#define PROPOSED_MANAGER_KEY "proposed_manager"
+#define MANAGER_KEY "manager"
+
+// TODO
+#define ORDER_APP_HASH 0x0123dff0a706f481b1831e818b0f206e8c62f22d9df010aabcf2a8f16c825591
+
+
+// tl:29: router:
+pushbytes "create_application"
+pushbytes "update_application"
+pushbytes "init"
+pushbytes "propose_manager"
+pushbytes "accept_manager"
+pushbytes "asset_opt_in"
+pushbytes "set_order_fee_rate"
+pushbytes "set_governor_order_fee_rate"
+pushbytes "set_governor_fee_rate_power_threshold"
+pushbytes "claim_fees"
+pushbytes "create_entry"
+txna ApplicationArgs 0
+match route_create_application route_update_application route_init route_propose_manager route_accept_manager route_asset_opt_in route_set_order_fee_rate route_set_governor_order_fee_rate route_set_governor_fee_rate_power_threshold route_claim_fees route_create_entry
+err                                                         // unexpected value
+route_create_application:
+    txn ApplicationID; pushint 0; ==; assert                // ApplicationID == 0
+    txna ApplicationArgs 1; btoi 
+    txna ApplicationArgs 2; dup; len; pushint 32; ==; assert// Bytes Size Assertion: 32 bytes
+    callsub __func__create_application
+    pushint 1; return
+route_update_application:
+    txn OnCompletion; pushint 4; ==; assert                 // assert OnCompletion == UpdateApplication
+    callsub __func__update_application
+    pushint 1; return
+route_init:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    callsub __func__init
+    pushint 1; return
+route_propose_manager:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; dup; len; pushint 32; ==; assert// Bytes Size Assertion: 32 bytes
+    callsub __func__propose_manager
+    pushint 1; return
+route_accept_manager:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    callsub __func__accept_manager
+    pushint 1; return
+route_asset_opt_in:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    callsub __func__asset_opt_in
+    pushint 1; return
+route_set_order_fee_rate:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    callsub __func__set_order_fee_rate
+    pushint 1; return
+route_set_governor_order_fee_rate:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    callsub __func__set_governor_order_fee_rate
+    pushint 1; return
+route_set_governor_fee_rate_power_threshold:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    callsub __func__set_governor_fee_rate_power_threshold
+    pushint 1; return
+route_claim_fees:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    callsub __func__claim_fees
+    pushint 1; return
+route_create_entry:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    callsub __func__create_entry
+    pushint 1; return
+
+
+// Permission: anyone
+// tl:46: func create_application(vault_app_id: int, manager_address: bytes[32]):
+__func__create_application:
+    store 1                                                 // manager_address [bytes[32]]
+    store 2                                                 // vault_app_id [int]
+    // tl:47: app_global_put(MANAGER_KEY, manager_address)
+    pushbytes MANAGER_KEY                                   // "manager"
+    load 1                                                  // manager_address
+    app_global_put
+    // tl:48: app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+    pushbytes VAULT_APP_ID_KEY                              // "vault_app_id"
+    load 2                                                  // vault_app_id
+    app_global_put
+    // tl:49: app_global_put(ORDER_FEE_RATE_KEY, 30)
+    pushbytes ORDER_FEE_RATE_KEY                            // "order_fee_rate"
+    pushint 30
+    app_global_put
+    // tl:50: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 15)
+    pushbytes GOVERNOR_ORDER_FEE_RATE_KEY                   // "governor_order_fee_rate"
+    pushint 15
+    app_global_put
+    // tl:51: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 500_000_000)
+    pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
+    pushint 500000000
+    app_global_put
+    
+    // create_application(vault_app_id,manager_address)
+    // tl:54: log(ARC28Event("create_application(uint64,address)", itob(vault_app_id), manager_address))
+    pushbytes 0x7f7fd1d9                                    // SHA512_256("create_application(uint64,address)")[:4]
+    load 2                                                  // vault_app_id
+    itob
+    load 1                                                  // manager_address
+    concat
+    concat
+    log
+    // tl:55: return
+    retsub
+
+
+// TODO: Remove function for mainnet
+// tl:61: func update_application():
+__func__update_application:
+    // tl:62: assert(Txn.Sender == app_global_get("manager"))
+    txn Sender
+    pushbytes "manager"
+    app_global_get
+    ==
+    assert
+    // tl:63: return
+    retsub
+
+
+// Permission: manager
+// tl:69: func init():
+__func__init:
+    // tl:70: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:72: log(ARC28Event("init()"))
+    pushbytes 0x8707a1db                                    // SHA512_256("init()")[:4]
+    log
+    // tl:73: return
+    retsub
+
+
+// permission: manager
+// tl:79: func propose_manager(new_manager: bytes[32]):
+__func__propose_manager:
+    store 3                                                 // new_manager [bytes[32]]
+    // tl:80: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:82: app_global_put(PROPOSED_MANAGER_KEY, new_manager)
+    pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
+    load 3                                                  // new_manager
+    app_global_put
+    // tl:83: log(ARC28Event("propose_manager(address)", new_manager))
+    pushbytes 0x9f8a67ff                                    // SHA512_256("propose_manager(address)")[:4]
+    load 3                                                  // new_manager
+    concat
+    log
+    // tl:84: return
+    retsub
+
+
+// The proposed manager must call this function to become the manager.
+// permission: proposed_manager
+// tl:91: func accept_manager():
+__func__accept_manager:
+    // tl:92: bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY) [slot 4]
+    pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
+    app_global_get
+    store 4                                                 // proposed_manager
+    // tl:93: assert(Txn.Sender == proposed_manager)
+    txn Sender
+    load 4                                                  // proposed_manager
+    ==
+    assert
+    
+    // tl:95: app_global_put(MANAGER_KEY, proposed_manager)
+    pushbytes MANAGER_KEY                                   // "manager"
+    load 4                                                  // proposed_manager
+    app_global_put
+    // tl:96: app_global_put(PROPOSED_MANAGER_KEY, "")
+    pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
+    pushbytes ""
+    app_global_put
+    // tl:97: log(ARC28Event("accept_manager(address)", proposed_manager))
+    pushbytes 0xbb6affe3                                    // SHA512_256("accept_manager(address)")[:4]
+    load 4                                                  // proposed_manager
+    concat
+    log
+    // tl:98: return
+    retsub
+
+
+// Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn.
+// tl:104: func asset_opt_in(asset_id: int):
+__func__asset_opt_in:
+    store 5                                                 // asset_id [int]
+    // tl:105: int is_opted_in = opt_in_to_asset_if_needed(asset_id) [slot 6]
+    load 5                                                  // asset_id
+    callsub __func__opt_in_to_asset_if_needed
+    store 6                                                 // is_opted_in
+    
+    // tl:107: if is_opted_in:
+    load 6                                                  // is_opted_in
+    bz l0_end
+    // then:
+        // tl:108: assert(Gtxn[-1].TypeEnum == Pay)
+        txn GroupIndex
+        pushint 1
+        -
+        gtxns TypeEnum
+        pushint 1                                           // Pay
+        ==
+        assert
+        // tl:109: assert(Gtxn[-1].Receiver == Global.CurrentApplicationAddress)
+        txn GroupIndex
+        pushint 1
+        -
+        gtxns Receiver
+        global CurrentApplicationAddress
+        ==
+        assert
+        // TODO: replace the hardcoded value with Global.AssetOptInMinBalance.
+        // tl:111: assert(Gtxn[-1].Amount >= 100000)
+        txn GroupIndex
+        pushint 1
+        -
+        gtxns Amount
+        pushint 100000
+        >=
+        assert
+    l0_end:
+    
+    // tl:114: return
+    retsub
+
+
+// tl:119: func set_order_fee_rate(fee_rate: int):
+__func__set_order_fee_rate:
+    store 7                                                 // fee_rate [int]
+    // tl:120: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:122: app_global_put(ORDER_FEE_RATE_KEY, fee_rate)
+    pushbytes ORDER_FEE_RATE_KEY                            // "order_fee_rate"
+    load 7                                                  // fee_rate
+    app_global_put
+    
+    // tl:124: log(ARC28Event("set_order_fee_rate(uint64)", itob(fee_rate)))
+    pushbytes 0x39a49787                                    // SHA512_256("set_order_fee_rate(uint64)")[:4]
+    load 7                                                  // fee_rate
+    itob
+    concat
+    log
+    // tl:125: return
+    retsub
+
+
+// tl:130: func set_governor_order_fee_rate(fee_rate: int):
+__func__set_governor_order_fee_rate:
+    store 8                                                 // fee_rate [int]
+    // tl:131: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:133: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, fee_rate)
+    pushbytes GOVERNOR_ORDER_FEE_RATE_KEY                   // "governor_order_fee_rate"
+    load 8                                                  // fee_rate
+    app_global_put
+    
+    // tl:135: log(ARC28Event("set_governor_order_fee_rate(uint64)", itob(fee_rate)))
+    pushbytes 0xc1305811                                    // SHA512_256("set_governor_order_fee_rate(uint64)")[:4]
+    load 8                                                  // fee_rate
+    itob
+    concat
+    log
+    // tl:136: return
+    retsub
+
+
+// tl:141: func set_governor_fee_rate_power_threshold(threshold: int):
+__func__set_governor_fee_rate_power_threshold:
+    store 9                                                 // threshold [int]
+    // tl:142: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:144: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, threshold)
+    pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
+    load 9                                                  // threshold
+    app_global_put
+    
+    // tl:146: log(ARC28Event("set_governor_fee_rate_power_threshold(uint64)", itob(threshold)))
+    pushbytes 0x746c09e0                                    // SHA512_256("set_governor_fee_rate_power_threshold(uint64)")[:4]
+    load 9                                                  // threshold
+    itob
+    concat
+    log
+    // tl:147: return
+    retsub
+
+
+// tl:152: func claim_fees(asset_id: int):
+__func__claim_fees:
+    store 10                                                // asset_id [int]
+    // tl:153: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    txn Sender
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    ==
+    assert
+    
+    // tl:155: int opted_in [slot 11]
+    // tl:156: int asset_balance [slot 12]
+    
+    // tl:158: if asset_id:
+    load 10                                                 // asset_id
+    bz l1_else
+    // then:
+        // tl:159: opted_in, asset_balance = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        global CurrentApplicationAddress
+        load 10                                             // asset_id
+        asset_holding_get AssetBalance
+        store 11                                            // opted_in
+        store 12                                            // asset_balance
+        // tl:160: assert(opted_in)
+        load 11                                             // opted_in
+        assert
+        b l1_end
+    l1_else:
+    // tl:161: else:
+        // tl:162: asset_balance = balance(Global.CurrentApplicationAddress)
+        global CurrentApplicationAddress
+        balance
+        store 12                                            // asset_balance
+        
+        // tl:164: int minimum_balance = min_balance(Global.CurrentApplicationAddress) [slot 13]
+        global CurrentApplicationAddress
+        min_balance
+        store 13                                            // minimum_balance
+        // tl:165: asset_balance = asset_balance - minimum_balance
+        load 12                                             // asset_balance
+        load 13                                             // minimum_balance
+        -
+        store 12                                            // asset_balance
+    l1_end:
+    
+    // tl:168: assert(asset_balance)
+    load 12                                                 // asset_balance
+    assert
+    // tl:169: transfer(asset_id, asset_balance, Global.CurrentApplicationAddress, app_global_get(MANAGER_KEY))
+    load 10                                                 // asset_id
+    load 12                                                 // asset_balance
+    global CurrentApplicationAddress
+    pushbytes MANAGER_KEY                                   // "manager"
+    app_global_get
+    callsub __func__transfer
+    
+    // tl:171: log(ARC28Event("claim_fees(uint64,uint64)", itob(asset_id), itob(asset_balance)))
+    pushbytes 0xbb6ce7d1                                    // SHA512_256("claim_fees(uint64,uint64)")[:4]
+    load 10                                                 // asset_id
+    itob
+    load 12                                                 // asset_balance
+    itob
+    concat
+    concat
+    log
+    // tl:172: return
+    retsub
+
+
+// Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
+// Permission: Anyone
+// tl:179: func create_entry():
+__func__create_entry:
+    // tl:180: box<Entry> entry = CreateBox(Concat("e", Txn.Sender)) [slot 14]
+    pushbytes "e"
+    txn Sender
+    concat
+    dup; pushint 8; box_create; assert                      // create & assert created
+    store 14                                                // box:entry
+    
+    // tl:182: int app_creation_index = Txn.GroupIndex - 1 [slot 15]
+    txn GroupIndex
+    pushint 1
+    -
+    store 15                                                // app_creation_index
+    // tl:183: assert(Gtxn[app_creation_index].Sender == Txn.Sender)
+    load 15                                                 // app_creation_index
+    gtxns Sender
+    txn Sender
+    ==
+    assert
+    // tl:184: assert(Gtxn[app_creation_index].TypeEnum == Appl)
+    load 15                                                 // app_creation_index
+    gtxns TypeEnum
+    pushint 6                                               // Appl
+    ==
+    assert
+    // tl:185: assert(Gtxn[app_creation_index].OnCompletion == NoOp)
+    load 15                                                 // app_creation_index
+    gtxns OnCompletion
+    pushint 0                                               // NoOp
+    ==
+    assert
+    // tl:186: assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
+    load 15                                                 // app_creation_index
+    gtxnsa ApplicationArgs 0
+    pushbytes "create_application"
+    ==
+    assert
+    // tl:187: assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
+    load 15                                                 // app_creation_index
+    gtxnsa ApplicationArgs 1
+    global CurrentApplicationID
+    itob
+    ==
+    assert
+    // tl:188: assert(Gtxn[app_creation_index].ApplicationArgs[2] == itob(app_global_get(VAULT_APP_ID_KEY)))
+    load 15                                                 // app_creation_index
+    gtxnsa ApplicationArgs 2
+    pushbytes VAULT_APP_ID_KEY                              // "vault_app_id"
+    app_global_get
+    itob
+    ==
+    assert
+    
+    // tl:190: bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram) [slot 16]
+    load 15                                                 // app_creation_index
+    gtxns ApprovalProgram
+    sha512_256
+    store 16                                                // approval_hash
+    // tl:191: assert(approval_hash == ORDER_APP_HASH)
+    load 16                                                 // approval_hash
+    pushbytes ORDER_APP_HASH                                // 0x0123dff0a706f481b1831e818b0f206e8c62f22d9df010aabcf2a8f16c825591
+    ==
+    assert
+    
+    // tl:193: entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
+    load 15                                                 // app_creation_index
+    gtxns CreatedApplicationID
+    itob
+    load 14
+    pushint 0
+    uncover 2
+    box_replace
+    // boxset entry.app_id
+    
+    // tl:195: int entry_count = app_global_get(ENTRY_COUNT_KEY) [slot 17]
+    pushbytes ENTRY_COUNT_KEY                               // "entry_count"
+    app_global_get
+    store 17                                                // entry_count
+    // tl:196: app_global_put(ENTRY_COUNT_KEY, entry_count + 1)
+    pushbytes ENTRY_COUNT_KEY                               // "entry_count"
+    load 17                                                 // entry_count
+    pushint 1
+    +
+    app_global_put
+    
+    // Logs
+    // tl:199: log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
+    pushbytes 0x416d501e                                    // SHA512_256("entry(address,uint64)")[:4]
+    txn Sender
+    load 14; pushint 0; pushint 8; box_extract; btoi// entry.app_id
+    itob
+    concat
+    concat
+    log
+    
+    // tl:201: return
+    retsub
+
+
+// tl:205: func opt_in_to_asset_if_needed(asset_id: int) int:
+__func__opt_in_to_asset_if_needed:
+    store 18                                                // asset_id [int]
+    // tl:206: int is_opted_in [slot 19]
+    
+    // tl:208: if asset_id:
+    load 18                                                 // asset_id
+    bz l2_end
+    // then:
+        // tl:209: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        global CurrentApplicationAddress
+        load 18                                             // asset_id
+        asset_holding_get AssetBalance
+        store 19                                            // is_opted_in
+        pop                                                 // discarding value for _
+        
+        // tl:211: if is_opted_in == 0:
+        load 19                                             // is_opted_in
+        pushint 0
+        ==
+        bz l3_end
+        // then:
+            // tl:212: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            load 18                                         // asset_id
+            pushint 0
+            global CurrentApplicationAddress
+            global CurrentApplicationAddress
+            callsub __func__transfer
+        l3_end:
+    l2_end:
+    // tl:215: return !is_opted_in
+    load 19                                                 // is_opted_in
+    !
+    retsub
+
+
+// tl:219: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+__func__transfer:
+    store 20                                                // receiver [bytes]
+    store 21                                                // sender [bytes]
+    store 22                                                // amount [int]
+    store 23                                                // asset_id [int]
+    // tl:220: if !asset_id:
+    load 23                                                 // asset_id
+    !
+    bz l4_else
+    // then:
+        // tl:221: inner_txn:
+        itxn_begin
+            // tl:222: TypeEnum: Pay
+            pushint 1                                       // Pay
+            itxn_field TypeEnum
+            // tl:223: Sender: sender
+            load 21                                         // sender
+            itxn_field Sender
+            // tl:224: Receiver: receiver
+            load 20                                         // receiver
+            itxn_field Receiver
+            // tl:225: Amount: amount
+            load 22                                         // amount
+            itxn_field Amount
+            // tl:226: Fee: 0
+            pushint 0
+            itxn_field Fee
+        itxn_submit
+        // end inner_txn
+        b l4_end
+    l4_else:
+    // tl:228: else:
+        // tl:229: inner_txn:
+        itxn_begin
+            // tl:230: TypeEnum: Axfer
+            pushint 4                                       // Axfer
+            itxn_field TypeEnum
+            // tl:231: Sender: sender
+            load 21                                         // sender
+            itxn_field Sender
+            // tl:232: AssetReceiver: receiver
+            load 20                                         // receiver
+            itxn_field AssetReceiver
+            // tl:233: AssetAmount: amount
+            load 22                                         // amount
+            itxn_field AssetAmount
+            // tl:234: XferAsset: asset_id
+            load 23                                         // asset_id
+            itxn_field XferAsset
+            // tl:235: Fee: 0
+            pushint 0
+            itxn_field Fee
+        itxn_submit
+        // end inner_txn
+    l4_end:
+    // tl:238: return
+    retsub
