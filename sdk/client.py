@@ -74,19 +74,10 @@ class OrderingClient(BaseClient):
         ]
 
         return self._submit(transactions, additional_fees=0)
-
-    def asset_opt_in(self, asset_ids: List[int]):
-        sp = self.get_suggested_params()
-
-        asset_count = len(asset_ids)
+    
+    def prepare_asset_opt_in_txn(self, asset_ids: List[int], sp):
         asset_ids = int_array(asset_ids, 8, 0)
         transactions = [
-            transaction.PaymentTxn(
-                sender=self.user_address,
-                sp=sp,
-                receiver=self.application_address,
-                amt=self.calculate_min_balance(assets=asset_count)
-            ),
             transaction.ApplicationCallTxn(
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
@@ -95,12 +86,26 @@ class OrderingClient(BaseClient):
                 app_args=["asset_opt_in", asset_ids],
             )
         ]
+        return transactions
 
-        return self._submit(transactions, additional_fees=asset_count)
+    def asset_opt_in(self, asset_ids: List[int]):
+        sp = self.get_suggested_params()
+        transactions = self.prepare_asset_opt_in_txn(asset_ids, sp)
+        transactions.insert(
+            0,
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=self.calculate_min_balance(assets=len(asset_ids))
+            ),
+        )
+
+        return self._submit(transactions, additional_fees=len(asset_ids))
 
     def get_order_count(self):
         return self.get_global(TOTAL_ORDER_COUNT_KEY, 0, self.app_id)
-    
+
     def get_order_box_name(self, id: int):
         return b"o" + int_to_bytes(id)
 
@@ -115,13 +120,17 @@ class OrderingClient(BaseClient):
         if not self.box_exists(order_box_name, self.app_id):
             new_boxes[order_box_name] = Order
 
+        assets_to_optin = [asset_id, target_asset_id]
+        assets_to_optin = [aid for aid in assets_to_optin if self.is_opted_in(self.application_address, aid)]
+
         transactions = [
             transaction.PaymentTxn(
                 sender=self.user_address,
                 sp=sp,
                 receiver=self.application_address,
-                amt=self.calculate_min_balance(boxes=new_boxes, assets=1)
+                amt=self.calculate_min_balance(boxes=new_boxes, assets=len(assets_to_optin))
             ) if new_boxes else None,
+            self.prepare_asset_opt_in_txn(assets_to_optin) if assets_to_optin else None,
             # Asset Transfer
             transaction.PaymentTxn(
                 sender=self.user_address,
