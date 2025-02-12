@@ -168,7 +168,7 @@ class OrderingClient(BaseClient):
             )
         ]
 
-        return self._submit(transactions, additional_fees=1)
+        return self._submit(transactions, additional_fees=1 + len(assets_to_optin))
 
     def cancel_order(self, order_id: int):
         sp = self.get_suggested_params()
