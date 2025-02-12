@@ -98,8 +98,8 @@ class PutOrderTests(OrderProtocolBaseTestCase):
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
-        axfer_txn = block_txns[1]
-        put_order_txn = block_txns[2]
+        axfer_txn = block_txns[2]
+        put_order_txn = block_txns[3]
 
         events = decode_logs(put_order_txn[b'dt'][b'lg'], ordering_events)
         order_event = events[0]
@@ -159,8 +159,8 @@ class PutOrderTests(OrderProtocolBaseTestCase):
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
-        axfer_txn = block_txns[1]
-        put_order_txn = block_txns[2]
+        axfer_txn = block_txns[2]
+        put_order_txn = block_txns[3]
 
         events = decode_logs(put_order_txn[b'dt'][b'lg'], ordering_events)
         order_event = events[0]

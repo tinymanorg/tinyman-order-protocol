@@ -121,7 +121,7 @@ class OrderingClient(BaseClient):
             new_boxes[order_box_name] = Order
 
         assets_to_optin = [asset_id, target_asset_id]
-        assets_to_optin = [aid for aid in assets_to_optin if self.is_opted_in(self.application_address, aid)]
+        assets_to_optin = [aid for aid in assets_to_optin if not self.is_opted_in(self.application_address, aid)]
 
         transactions = [
             transaction.PaymentTxn(
@@ -130,7 +130,7 @@ class OrderingClient(BaseClient):
                 receiver=self.application_address,
                 amt=self.calculate_min_balance(boxes=new_boxes, assets=len(assets_to_optin))
             ) if new_boxes else None,
-            self.prepare_asset_opt_in_txn(assets_to_optin) if assets_to_optin else None,
+            self.prepare_asset_opt_in_txn(assets_to_optin, sp) if assets_to_optin else None,
             # Asset Transfer
             transaction.PaymentTxn(
                 sender=self.user_address,

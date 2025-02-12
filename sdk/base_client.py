@@ -100,6 +100,9 @@ class BaseClient():
                 return i
 
     def is_opted_in(self, address, asset_id):
+        if asset_id == 0:
+            return True
+
         try:
             self.algod.account_asset_info(address, asset_id)
             return True
