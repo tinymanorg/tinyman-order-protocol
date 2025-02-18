@@ -12,6 +12,34 @@ entry_event = Event(
     ]
 )
 
+set_order_fee_rate_event = Event(
+    name="set_order_fee_rate",
+    args=[
+        abi.Argument(arg_type="uint64", name="fee_rate")
+    ]
+)
+
+set_governor_order_fee_rate_event = Event(
+    name="set_governor_order_fee_rate",
+    args=[
+        abi.Argument(arg_type="uint64", name="fee_rate")
+    ]
+)
+
+set_governor_fee_rate_power_threshold_event = Event(
+    name="set_governor_fee_rate_power_threshold",
+    args=[
+        abi.Argument(arg_type="uint64", name="threshold")
+    ]
+)
+
+claim_fees = Event(
+    name="claim_fees",
+    args=[
+        abi.Argument(arg_type="uint64", name="asset_id"),
+        abi.Argument(arg_type="uint64", name="amount")
+    ]
+)
 
 # Order Events
 order_event = Event(
@@ -52,6 +80,7 @@ cancel_order_event = Event(
 start_execute_order_event = Event(
     name="start_execute_order",
     args=[
+        abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
         abi.Argument(arg_type="address", name="filler_address"),
     ]
@@ -61,6 +90,7 @@ start_execute_order_event = Event(
 end_execute_order_event = Event(
     name="end_execute_order",
     args=[
+        abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
         abi.Argument(arg_type="address", name="filler_address"),
         abi.Argument(arg_type="uint64", name="fill_amount"),

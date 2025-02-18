@@ -255,7 +255,7 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
 
     # Logs
-    log(ARC28Event("start_execute_order(uint64,address)", itob(order_id), Txn.Sender))
+    log(ARC28Event("start_execute_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
 
     return
 end
@@ -300,7 +300,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     bytes order_data
     _, order_data = box_get(order)
     log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
     # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.

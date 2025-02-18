@@ -461,6 +461,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
+        self.assertEqual(end_execute_order_event['user_address'], self.user_address)
         self.assertEqual(end_execute_order_event['order_id'], 0)
         self.assertEqual(end_execute_order_event['filler_address'], filler_client.user_address)
         self.assertEqual(end_execute_order_event['fill_amount'], 100_000)
@@ -585,6 +586,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
+        self.assertEqual(end_execute_order_event['user_address'], self.user_address)
         self.assertEqual(end_execute_order_event['order_id'], 0)
         self.assertEqual(end_execute_order_event['filler_address'], filler_client.user_address)
         self.assertEqual(end_execute_order_event['fill_amount'], fill_amount)
@@ -720,6 +722,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
+        self.assertEqual(end_execute_order_event['user_address'], self.user_address)
         self.assertEqual(end_execute_order_event['order_id'], 0)
         self.assertEqual(end_execute_order_event['filler_address'], filler_client.user_address)
         self.assertEqual(end_execute_order_event['fill_amount'], fill_amount)

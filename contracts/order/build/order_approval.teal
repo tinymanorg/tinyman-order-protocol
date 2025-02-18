@@ -698,11 +698,14 @@ __func__start_execute_order:
     callsub __func__transfer
     
     // Logs
-    // tl:258: log(ARC28Event("start_execute_order(uint64,address)", itob(order_id), Txn.Sender))
-    pushbytes 0xc3e40636                                    // SHA512_256("start_execute_order(uint64,address)")[:4]
+    // tl:258: log(ARC28Event("start_execute_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
+    pushbytes 0x1740bc29                                    // SHA512_256("start_execute_order(address,uint64,address)")[:4]
+    pushbytes USER_ADDRESS_KEY                              // "user_address"
+    app_global_get
     load 29                                                 // order_id
     itob
     txn Sender
+    concat
     concat
     concat
     log
@@ -861,8 +864,10 @@ __func__end_execute_order:
     concat
     concat
     log
-    // tl:303: log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
-    pushbytes 0x0d0580ec                                    // SHA512_256("end_execute_order(uint64,address,uint64,uint64)")[:4]
+    // tl:303: log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    pushbytes 0x6cfd21b6                                    // SHA512_256("end_execute_order(address,uint64,address,uint64,uint64)")[:4]
+    pushbytes USER_ADDRESS_KEY                              // "user_address"
+    app_global_get
     load 35                                                 // order_id
     itob
     txn Sender
@@ -870,6 +875,7 @@ __func__end_execute_order:
     itob
     load 40                                                 // received_amount
     itob
+    concat
     concat
     concat
     concat
