@@ -9,7 +9,7 @@ GOVERNOR_ORDER_FEE_RATE_KEY = b"governor_order_fee_rate"
 GOVERNOR_FEE_RATE_POWER_THRESHOLD = b"governor_fee_rate_power_threshold"
 
 USER_ADDRESS_KEY = b"user_address"
-TOTAL_ORDER_COUNT_KEY = b"total_order_count_key"
+TOTAL_ORDER_COUNT_KEY = b"order_count"
 PROPOSED_MANAGER_KEY = b"proposed_manager"
 MANAGER_KEY = b"manager"
 
