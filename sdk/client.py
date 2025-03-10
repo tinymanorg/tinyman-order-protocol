@@ -263,6 +263,32 @@ class OrderingClient(BaseClient):
 
         return txn
 
+    def collect(self, order_id: int):
+        sp = self.get_suggested_params()
+
+        order_box_name = self.get_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order")
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "collect",
+                    int_to_bytes(order_id)
+                ],
+                boxes=[
+                    (0, order_box_name),
+                ],
+                foreign_assets=[order.target_asset_id],
+                foreign_apps=[self.registry_app_id]
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=2)
+
 
 class RegistryClient(BaseClient):
     def __init__(self, algod, registry_app_id, vault_app_id, user_address, user_sk) -> None:
