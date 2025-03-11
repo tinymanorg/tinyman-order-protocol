@@ -99,6 +99,15 @@ end_execute_order_event = Event(
 )
 
 
+collect_event = Event(
+    name="collect",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="uint64", name="collected_target_amount")
+    ]
+)
+
+
 registry_events = [
     entry_event
 ]
@@ -109,5 +118,6 @@ ordering_events = [
     put_order_event,
     cancel_order_event,
     start_execute_order_event,
-    end_execute_order_event
+    end_execute_order_event,
+    collect_event
 ]
