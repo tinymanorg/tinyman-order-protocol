@@ -289,6 +289,22 @@ class OrderingClient(BaseClient):
 
         return self._submit(transactions, additional_fees=2)
 
+    def update_ordering_app(self, approval_program, clear_program):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationUpdateTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.app_id,
+                app_args=[b"update_application"],
+                approval_program=approval_program,
+                clear_program=clear_program,
+            )
+        ]
+
+        return self._submit(transactions)
+
 
 class RegistryClient(BaseClient):
     def __init__(self, algod, registry_app_id, vault_app_id, user_address, user_sk) -> None:
