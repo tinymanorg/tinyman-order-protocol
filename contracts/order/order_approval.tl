@@ -151,9 +151,13 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     assert(amount > 0)
     assert(target_amount > 0)
     assert(asset_id != target_asset_id)
-    assert(duration > 0)
 
-    int expiration_timestamp = Global.LatestTimestamp + duration
+    int expiration_timestamp
+    if !duration:
+        expiration_timestamp = MAX_UINT64
+    else:
+        expiration_timestamp = Global.LatestTimestamp + duration
+    end
 
     int is_opted_in_to_target
     is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
