@@ -140,7 +140,7 @@ end
 # Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 # Permission: App owner (User)
 @public()
-func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, expiration_timestamp: int):
+func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
@@ -151,7 +151,9 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     assert(amount > 0)
     assert(target_amount > 0)
     assert(asset_id != target_asset_id)
-    assert(expiration_timestamp > Global.LatestTimestamp)
+    assert(duration > 0)
+
+    int expiration_timestamp = Global.LatestTimestamp + duration
 
     int is_opted_in_to_target
     is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)

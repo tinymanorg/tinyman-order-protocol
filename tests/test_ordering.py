@@ -93,7 +93,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=False,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         block = self.ledger.last_block
@@ -154,7 +154,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=True,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         block = self.ledger.last_block
@@ -243,7 +243,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=False,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         # Cancel Order
@@ -305,7 +305,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=True,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         # Mock partial filling.
@@ -390,7 +390,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=False,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         # Execute Order
@@ -513,7 +513,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=True,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         # Execute Order
@@ -638,7 +638,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
             target_asset_id=self.tiny_asset_id,
             target_amount=15_000,
             is_partial_allowed=True,
-            expiration_timestamp=now + DAY + 4 * WEEK
+            duration=4 * WEEK
         )
 
         # Modify the order as if it is partially filled before.

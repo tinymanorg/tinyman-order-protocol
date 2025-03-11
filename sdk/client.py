@@ -109,7 +109,7 @@ class OrderingClient(BaseClient):
     def get_order_box_name(self, id: int):
         return b"o" + int_to_bytes(id)
 
-    def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, expiration_timestamp: int, order_id: int=None):
+    def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, duration: int, order_id: int=None):
         sp = self.get_suggested_params()
 
         if order_id is None:
@@ -157,7 +157,7 @@ class OrderingClient(BaseClient):
                     int_to_bytes(target_asset_id),
                     int_to_bytes(target_amount),
                     int_to_bytes(int(is_partial_allowed)),
-                    int_to_bytes(expiration_timestamp)
+                    int_to_bytes(duration)
                 ],
                 foreign_assets=[target_asset_id],
                 foreign_apps=[self.registry_app_id, self.vault_app_id],
