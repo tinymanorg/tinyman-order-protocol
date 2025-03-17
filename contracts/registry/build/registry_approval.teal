@@ -20,7 +20,7 @@
 #define MANAGER_KEY "manager"
 
 // TODO
-#define ORDER_APP_HASH 0x027d4c66fc0e7b4696b51620974d81dfc31a4c9f48fc9c574b2e89cf91ac4219
+#define ORDER_APP_HASH 0x2cb06aa207570c893b288d108627cd6b339203b36870162684ad338865025153
 
 // tl:28: router:
 pushbytes "create_application"
@@ -466,7 +466,7 @@ __func__create_entry:
     store 16                                                // approval_hash
     // tl:190: assert(approval_hash == ORDER_APP_HASH)
     load 16                                                 // approval_hash
-    pushbytes ORDER_APP_HASH                                // 0x027d4c66fc0e7b4696b51620974d81dfc31a4c9f48fc9c574b2e89cf91ac4219
+    pushbytes ORDER_APP_HASH                                // 0x2cb06aa207570c893b288d108627cd6b339203b36870162684ad338865025153
     ==
     assert
     
