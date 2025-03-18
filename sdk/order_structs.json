@@ -54,6 +54,71 @@
           "offset": 72
         }
       }
+    },
+    "RecurringOrder": {
+      "size": 96,
+      "fields": {
+        "asset_id": {
+          "type": "int",
+          "size": 8,
+          "offset": 0
+        },
+        "amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 8
+        },
+        "target_asset_id": {
+          "type": "int",
+          "size": 8,
+          "offset": 16
+        },
+        "filled_amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 24
+        },
+        "collected_target_amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 32
+        },
+        "target_recurrence": {
+          "type": "int",
+          "size": 8,
+          "offset": 40
+        },
+        "filled_recurrence": {
+          "type": "int",
+          "size": 8,
+          "offset": 48
+        },
+        "interval": {
+          "type": "int",
+          "size": 8,
+          "offset": 56
+        },
+        "fee_rate": {
+          "type": "int",
+          "size": 8,
+          "offset": 64
+        },
+        "start_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 72
+        },
+        "creation_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 80
+        },
+        "expiration_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 88
+        }
+      }
     }
   }
 }

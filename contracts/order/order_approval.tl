@@ -22,14 +22,29 @@ struct Order:
 end
 
 
+# Name: r<id>
+struct RecurringOrder:
+    asset_id: int
+    amount: int
+    target_asset_id: int
+    filled_amount: int
+    collected_target_amount: int
+    # Recurring Order Only Fields.
+    target_recurrence: int
+    filled_recurrence: int
+    interval: int
+    fee_rate: int
+    start_timestamp: int
+    creation_timestamp: int
+    expiration_timestamp: int
+end
+
+
 # Global State
 
 const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
 const bytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY = "registry_app_account_address"
 const bytes VAULT_APP_ID_KEY = "vault_app_id"
-const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
-const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
-const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
 
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
@@ -39,10 +54,22 @@ const bytes MANAGER_KEY = "manager"
 
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 
+# Global State External
+
+const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
+const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
+const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
+
+# Local State External
+
+const bytes IS_ENDORSED_KEY = "is_endorsed"
+
 # Math Constants
 
 const int RATE_SCALER = 18446744073709551615
 const int MAX_UINT64 = 18446744073709551615
+const int MINUTE = 60
+const int INTERVAL_TOLERANCE = 30
 
 
 router:
@@ -56,6 +83,10 @@ router:
     cancel_order
     start_execute_order
     end_execute_order
+    put_recurring_order
+    cancel_recurring_order
+    start_execute_recurring_order
+    end_execute_recurring_order
     collect
 end
 
@@ -351,6 +382,220 @@ func collect(order_id: int):
     return
 end
 
+
+# Description: Create a recurring order with the monotonically incremented ORDER_COUNT as id.
+# Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
+# Permission: App owner (User)
+@public()
+func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, start_timestamp: int, duration: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
+    box<RecurringOrder> order = CreateBox(Concat("r", itob(total_order_count)))
+
+    # Assertions
+    assert(amount > 0)
+    assert(asset_id != target_asset_id)
+    assert(target_recurrence > 0)
+    assert(interval > MINUTE)
+    assert(!(interval % MINUTE))
+
+    if !start_timestamp:
+        start_timestamp = Global.LatestTimestamp
+    else:
+        assert(start_timestamp > Global.LatestTimestamp)
+    end
+
+    int expiration_timestamp
+    if !duration:
+        expiration_timestamp = MAX_UINT64
+    else:
+        expiration_timestamp = Global.LatestTimestamp + duration
+    end
+
+    assert(expiration_timestamp >= (start_timestamp + (target_recurrence * interval)))
+
+    int is_opted_in_to_target
+    is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
+    assert(is_opted_in_to_target)
+
+    check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
+
+    int fee_rate = get_fee_rate()
+
+    order.asset_id = asset_id
+    order.amount = amount
+    order.target_asset_id = target_asset_id
+    order.collected_target_amount = 0
+    order.target_recurrence = target_recurrence
+    order.filled_recurrence = 0
+    order.interval = interval
+    order.fee_rate = fee_rate
+    order.start_timestamp = start_timestamp
+    order.creation_timestamp = Global.LatestTimestamp
+    order.expiration_timestamp = expiration_timestamp
+
+    app_global_put(TOTAL_ORDER_COUNT_KEY, total_order_count + 1)
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
+
+    return
+end
+
+
+# Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
+# Prerequisites: If partial filling is utilized, collect method must be called before.
+# Permission: App owner (User)
+@public()
+func cancel_recurring_order(order_id: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+
+    # It is assumed that the order is deleted once it is executed.
+    # Send remaining amount back to user.
+
+    int remaining_amount = order.amount - order.filled_amount
+
+    assert(!order.collected_target_amount)
+
+    transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_order(uint64)", itob(order_id)))
+
+    # Delete the box.
+    _ = box_del(order)
+
+    return
+end
+
+
+# Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
+# An executor must call `end_execute_recurring_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
+# Permission: Everyone
+@public()
+func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
+    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+
+    # Assertions
+    assert(index_diff >= 2)
+
+    int remaining_recurrence = order.target_recurrence - order.filled_recurrence
+    assert(remaining_recurrence > 0)
+
+    # Assert that Txn.Sender is permissioned to fill recurring orders.
+    check_is_endorsed(Txn.Sender)
+
+    int recurrence_amount
+
+    # If it is the last recurrence, all left needs to be filled.
+    if remaining_recurrence == 1:
+        recurrence_amount = order.amount - order.filled_amount
+    else:
+        recurrence_amount = order.amount / order.target_recurrence
+    end
+
+    assert(fill_amount == recurrence_amount)
+
+    # TODO: If a recurrence is missed for fill, give extra time.
+    # Timestamp should be in the bounds of [recurrence_timestamp - INTERVAL_TOLERANCE, recurrence_timestamp + INTERVAL_TOLERANCE].
+    int recurrence_timestamp = order.start_timestamp + (order.interval * (order.filled_recurrence + 1))
+    assert(((recurrence_timestamp - INTERVAL_TOLERANCE) <= Global.LatestTimestamp) && (Global.LatestTimestamp <= (recurrence_timestamp + INTERVAL_TOLERANCE)))
+
+    assert(Global.LatestTimestamp <= order.expiration_timestamp)
+
+    int end_execute_order_txn_index = Txn.GroupIndex + index_diff
+    assert(Gtxn[end_execute_order_txn_index].Sender == Txn.Sender)
+    assert(Gtxn[end_execute_order_txn_index].TypeEnum == Appl)
+    assert(Gtxn[end_execute_order_txn_index].OnCompletion == NoOp)
+    assert(Gtxn[end_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[0] == "end_execute_recurring_order")
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
+    # Parameters `fill_amount` and `index_diff` must be the same.
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+
+    # Transfer `fill_amount` to executor.
+    transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
+
+    # Logs
+    log(ARC28Event("start_execute_recurring_order(uint64,address)", itob(order_id), Txn.Sender))
+
+    return
+end
+
+
+# Description: Method checks the validity of the execution between `start_execute_recurring_order` and `end_execute_recurring_order`.
+# An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
+# Permission: Everyone
+@public()
+func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+
+    int start_execute_order_txn_index = Txn.GroupIndex - index_diff
+
+    # Assertions
+    assert(Gtxn[start_execute_order_txn_index].Sender == Txn.Sender)
+    assert(Gtxn[start_execute_order_txn_index].TypeEnum == Appl)
+    assert(Gtxn[start_execute_order_txn_index].OnCompletion == NoOp)
+    assert(Gtxn[start_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[0] == "start_execute_recurring_order")
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
+    # Parameters `fill_amount` and `index_diff` must be the same.
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+
+    # Assert that user received the target asset.
+    int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0)
+
+    order.collected_target_amount = order.collected_target_amount + received_amount
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+
+    # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
+    # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
+    # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
+    if order.target_recurrence == order.filled_recurrence:
+        int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
+
+        transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+        transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+        _ = box_del(order)
+    end
+
+    return
+end
+
+
+func check_is_endorsed(user_address: bytes[32]):
+    int exists
+    bytes is_endorsed_bytes
+    int is_endorsed
+
+    exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
+
+    assert(exists)
+
+    is_endorsed = UncheckedCast(is_endorsed_bytes, int)
+    assert(is_endorsed)
+
+    return
+end
 
 func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
     bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount)

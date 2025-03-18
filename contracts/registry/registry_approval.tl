@@ -22,6 +22,10 @@ const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
 
+# Local State
+
+const bytes IS_ENDORSED_KEY = "is_endorsed"
+
 # TODO
 const bytes ORDER_APP_HASH = 0x2cb06aa207570c893b288d108627cd6b339203b36870162684ad338865025153
 
@@ -36,6 +40,7 @@ router:
     set_governor_order_fee_rate
     set_governor_fee_rate_power_threshold
     claim_fees
+    endorse
     create_entry
 end
 
@@ -168,6 +173,36 @@ func claim_fees(asset_id: int):
     transfer(asset_id, asset_balance, Global.CurrentApplicationAddress, app_global_get(MANAGER_KEY))
 
     log(ARC28Event("claim_fees(uint64,uint64)", itob(asset_id), itob(asset_balance)))
+    return
+end
+
+
+@public()
+func endorse(user_address: bytes[32]):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    int is_endorsed
+    is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
+
+    assert(!is_endorsed)
+    app_local_put(user_address, IS_ENDORSED_KEY, 1)
+
+    log(ARC28Event("endorse(address)", user_address))
+    return
+end
+
+
+@public()
+func deendorse(user_address: bytes[32]):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    int is_endorsed
+    is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
+
+    assert(is_endorsed)
+    app_local_del(user_address, IS_ENDORSED_KEY)
+
+    log(ARC28Event("deendorse(address)", user_address))
     return
 end
 

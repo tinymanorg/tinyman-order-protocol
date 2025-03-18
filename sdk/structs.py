@@ -10,3 +10,4 @@ register_struct_file(filepath=SDK_DIR / "registry_structs.json")
 
 Order = get_struct("Order")
 Entry = get_struct("Entry")
+RecurringOrder = get_struct("RecurringOrder")

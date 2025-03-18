@@ -109,6 +109,9 @@ class OrderingClient(BaseClient):
     def get_order_box_name(self, id: int):
         return b"o" + int_to_bytes(id)
 
+    def get_recurring_order_box_name(self, id: int):
+        return b"r" + int_to_bytes(id)
+
     def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, duration: int=0, order_id: int=None):
         sp = self.get_suggested_params()
 
@@ -288,6 +291,161 @@ class OrderingClient(BaseClient):
         ]
 
         return self._submit(transactions, additional_fees=2)
+
+    def put_recurring_order(self, asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, start_timestamp: int, duration: int, order_id: int=None):
+        sp = self.get_suggested_params()
+
+        if order_id is None:
+            order_id = self.get_order_count()
+
+        order_box_name = self.get_recurring_order_box_name(order_id)
+        new_boxes = {}
+        if not self.box_exists(order_box_name, self.app_id):
+            new_boxes[order_box_name] = Order
+
+        assets_to_optin = [asset_id, target_asset_id]
+        assets_to_optin = [aid for aid in assets_to_optin if not self.is_opted_in(self.application_address, aid)]
+
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=self.calculate_min_balance(boxes=new_boxes, assets=len(assets_to_optin))
+            ) if new_boxes else None,
+            self.prepare_asset_opt_in_txn(assets_to_optin, sp) if assets_to_optin else None,
+            # Asset Transfer
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=amount
+            ) if asset_id == 0 else
+            transaction.AssetTransferTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                index=asset_id,
+                amt=amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_order",
+                    int_to_bytes(asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(target_asset_id),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                    int_to_bytes(start_timestamp),
+                    int_to_bytes(duration)
+                ],
+                foreign_assets=[target_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address))
+                ],
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=1 + len(assets_to_optin))
+
+    def cancel_recurring_order(self, order_id: int):
+        sp = self.get_suggested_params()
+
+        order_box_name = self.get_recurring_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order")
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "cancel_recurring_order",
+                    int_to_bytes(order_id)
+                ],
+                boxes=[
+                    (0, order_box_name),
+                ],
+                foreign_assets=[order.asset_id],
+                foreign_apps=[self.registry_app_id]
+            )
+        ]
+
+        return self._submit(transactions, additional_fees=1)
+
+    def prepare_start_execute_recurring_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+        """
+        It is assumed that the caller of this method is a filler.
+
+        Parameters
+        ----------
+        order_app_id : Id of the account's order app that will be filled.
+        account_address : Account whom its order will be filled.
+        """
+
+        order_box_name = self.get_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+
+        txn = transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=order_app_id,
+                app_args=[
+                    "start_execute_recurring_order",
+                    int_to_bytes(order_id),
+                    int_to_bytes(fill_amount),
+                    int_to_bytes(index_diff)
+                ],
+                boxes=[
+                    (0, order_box_name),
+                ],
+                accounts=[account_address],
+                foreign_assets=[order.asset_id]
+            )
+
+        return txn
+
+    def prepare_end_execute_recurring_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+        """
+        It is assumed that the caller of this method is a filler.
+
+        Parameters
+        ----------
+        order_app_id : Id of the account's order app that will be filled.
+        account_address : Account whom its order will be filled.
+        """
+
+        order_box_name = self.get_order_box_name(order_id)
+        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+
+        txn = transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=order_app_id,
+                app_args=[
+                    "end_execute_recurring_order",
+                    int_to_bytes(order_id),
+                    int_to_bytes(fill_amount),
+                    int_to_bytes(index_diff)
+                ],
+                boxes=[
+                    (0, order_box_name)
+                ],
+                accounts=[account_address, self.registry_application_address],
+                foreign_apps=[self.registry_app_id],
+                foreign_assets=[order.target_asset_id]
+            )
+
+        return txn
 
     def update_ordering_app(self, approval_program, clear_program):
         sp = self.get_suggested_params()
