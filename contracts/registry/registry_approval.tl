@@ -27,7 +27,7 @@ const bytes MANAGER_KEY = "manager"
 const bytes IS_ENDORSED_KEY = "is_endorsed"
 
 # TODO
-const bytes ORDER_APP_HASH = 0x2cb06aa207570c893b288d108627cd6b339203b36870162684ad338865025153
+const bytes ORDER_APP_HASH = 0x9b2f4effe4d4d626cea72e6c2c381f1e613b3c4c191c97b54371ea961129ba72
 
 router:
     create_application
@@ -41,6 +41,8 @@ router:
     set_governor_fee_rate_power_threshold
     claim_fees
     endorse
+    deendorse
+    user_opt_in
     create_entry
 end
 
@@ -203,6 +205,13 @@ func deendorse(user_address: bytes[32]):
     app_local_del(user_address, IS_ENDORSED_KEY)
 
     log(ARC28Event("deendorse(address)", user_address))
+    return
+end
+
+
+@public(OnCompletion=OptIn)
+func user_opt_in():
+    log(ARC28Event("user_opt_in(address)", Txn.Sender))
     return
 end
 
