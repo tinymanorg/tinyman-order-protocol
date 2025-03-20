@@ -441,7 +441,7 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, targe
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
 
     return
@@ -470,8 +470,8 @@ func cancel_recurring_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("cancel_order(uint64)", itob(order_id)))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
 
     # Delete the box.
     _ = box_del(order)
@@ -529,7 +529,7 @@ func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: 
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
 
     # Logs
-    log(ARC28Event("start_execute_recurring_order(uint64,address)", itob(order_id), Txn.Sender))
+    log(ARC28Event("start_execute_recurring_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
 
     return
 end
@@ -559,13 +559,15 @@ func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: in
     # Assert that user received the target asset.
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0)
 
+    order.filled_amount = order.filled_amount + fill_amount
+    order.filled_recurrence = order.filled_recurrence + 1
     order.collected_target_amount = order.collected_target_amount + received_amount
 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("end_execute_order(uint64,address,uint64,uint64)", itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
     # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
@@ -596,6 +598,7 @@ func check_is_endorsed(user_address: bytes[32]):
 
     return
 end
+
 
 func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
     bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount)
