@@ -33,13 +33,30 @@ set_governor_fee_rate_power_threshold_event = Event(
     ]
 )
 
-claim_fees = Event(
+claim_fees_event = Event(
     name="claim_fees",
     args=[
         abi.Argument(arg_type="uint64", name="asset_id"),
         abi.Argument(arg_type="uint64", name="amount")
     ]
 )
+
+
+endorse_event = Event(
+    name="endorse",
+    args=[
+        abi.Argument(arg_type="address", name="user_address")
+    ]
+)
+
+
+deendorse_event = Event(
+    name="deendorse",
+    args=[
+        abi.Argument(arg_type="address", name="user_address")
+    ]
+)
+
 
 # Order Events
 order_event = Event(
@@ -108,7 +125,73 @@ collect_event = Event(
 )
 
 
+# Recurring Order Events
+recurring_order_event = Event(
+    name="recurring_order",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="uint64", name="asset_id"),
+        abi.Argument(arg_type="uint64", name="amount"),
+        abi.Argument(arg_type="uint64", name="target_asset_id"),
+        abi.Argument(arg_type="uint64", name="filled_amount"),
+        abi.Argument(arg_type="uint64", name="collected_target_amount"),
+        abi.Argument(arg_type="uint64", name="target_recurrence"),
+        abi.Argument(arg_type="uint64", name="filled_recurrence"),
+        abi.Argument(arg_type="uint64", name="interval"),
+        abi.Argument(arg_type="uint64", name="fee_rate"),
+        abi.Argument(arg_type="uint64", name="start_timestamp"),
+        abi.Argument(arg_type="uint64", name="creation_timestamp"),
+        abi.Argument(arg_type="uint64", name="expiration_timestamp")
+    ]
+)
+
+
+put_recurring_order_event = Event(
+    name="put_recurring_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ]
+)
+
+
+cancel_recurring_order_event = Event(
+    name="cancel_recurring_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ]
+)
+
+
+start_execute_recurring_order_event = Event(
+    name="start_execute_recurring_order",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="address", name="filler_address"),
+    ]
+)
+
+
+end_execute_recurring_order_event = Event(
+    name="end_execute_recurring_order",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+        abi.Argument(arg_type="address", name="filler_address"),
+        abi.Argument(arg_type="uint64", name="fill_amount"),
+        abi.Argument(arg_type="uint64", name="bought_amount"),
+    ]
+)
+
+
 registry_events = [
+    set_order_fee_rate_event,
+    set_governor_order_fee_rate_event,
+    set_governor_fee_rate_power_threshold_event,
+    claim_fees_event,
+    endorse_event,
+    deendorse_event,
     entry_event
 ]
 
@@ -119,5 +202,10 @@ ordering_events = [
     cancel_order_event,
     start_execute_order_event,
     end_execute_order_event,
-    collect_event
+    collect_event,
+    recurring_order_event,
+    put_recurring_order_event,
+    cancel_recurring_order_event,
+    start_execute_recurring_order_event,
+    end_execute_recurring_order_event,
 ]
