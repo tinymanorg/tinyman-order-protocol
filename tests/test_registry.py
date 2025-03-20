@@ -255,3 +255,71 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.registry_application_address))
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.manager_address))
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 1000)
+
+    def test_user_opt_in(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+    def test_endorse(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+        # Endorse
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.endorse(self.user_address)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        endorse_txn = block_txns[0]
+
+        events = decode_logs(endorse_txn[b'dt'][b'lg'], registry_events)
+        endorse_event = events[0]
+
+        self.assertEqual(endorse_event['event_name'], 'endorse')
+        self.assertEqual(endorse_event['user_address'], self.user_address)
+
+        user_local_state = self.ledger.get_local_state(self.user_address, self.registry_app_id)
+        self.assertEqual(user_local_state[IS_ENDORSED_KEY], 1)
+
+    def test_deendorse(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+        # Endorse
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.endorse(self.user_address)
+
+        # Deendorse
+        self.ledger.next_timestamp = now + DAY + 2
+        self.manager_client.deendorse(self.user_address)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        endorse_txn = block_txns[0]
+
+        events = decode_logs(endorse_txn[b'dt'][b'lg'], registry_events)
+        deendorse_event = events[0]
+
+        self.assertEqual(deendorse_event['event_name'], 'deendorse')
+        self.assertEqual(deendorse_event['user_address'], self.user_address)
+
+        user_local_state = self.ledger.get_local_state(self.user_address, self.registry_app_id)
+        self.assertTrue(IS_ENDORSED_KEY not in user_local_state)

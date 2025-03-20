@@ -18,7 +18,7 @@ order_app_local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
 order_app_extra_pages = 1      
 
 registry_app_global_schema = transaction.StateSchema(num_uints=16, num_byte_slices=16)
-registry_app_local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
+registry_app_local_schema = transaction.StateSchema(num_uints=8, num_byte_slices=8)
 registry_app_extra_pages = 1   
 
 
