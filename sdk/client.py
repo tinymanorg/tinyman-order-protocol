@@ -334,7 +334,7 @@ class OrderingClient(BaseClient):
                 sp=sp,
                 index=self.app_id,
                 app_args=[
-                    "put_order",
+                    "put_recurring_order",
                     int_to_bytes(asset_id),
                     int_to_bytes(amount),
                     int_to_bytes(target_asset_id),
@@ -390,7 +390,7 @@ class OrderingClient(BaseClient):
         account_address : Account whom its order will be filled.
         """
 
-        order_box_name = self.get_order_box_name(order_id)
+        order_box_name = self.get_recurring_order_box_name(order_id)
         order = self.get_box(order_box_name, "Order", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
@@ -423,7 +423,7 @@ class OrderingClient(BaseClient):
         account_address : Account whom its order will be filled.
         """
 
-        order_box_name = self.get_order_box_name(order_id)
+        order_box_name = self.get_recurring_order_box_name(order_id)
         order = self.get_box(order_box_name, "Order", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
@@ -458,6 +458,21 @@ class OrderingClient(BaseClient):
                 app_args=[b"update_application"],
                 approval_program=approval_program,
                 clear_program=clear_program,
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def registry_user_opt_in(self):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.OptInOC,
+                sp=sp,
+                index=self.registry_app_id,
+                app_args=["user_opt_in"]
             )
         ]
 
@@ -592,3 +607,35 @@ class RegistryClient(BaseClient):
         ]
 
         return self._submit(transactions, additional_fees=1)
+
+    def endorse(self, user_address: str):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["endorse", decode_address(user_address)],
+                accounts=[user_address]
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def deendorse(self, user_address: str):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=["deendorse", decode_address(user_address)],
+                accounts=[user_address]
+            )
+        ]
+
+        return self._submit(transactions)

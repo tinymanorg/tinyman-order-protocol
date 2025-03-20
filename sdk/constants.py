@@ -15,3 +15,6 @@ MANAGER_KEY = b"manager"
 
 # Registry App Globals
 ENTRY_COUNT_KEY = b"entry_count"
+
+# Registry App Locals
+IS_ENDORSED_KEY = b"is_endorsed"
