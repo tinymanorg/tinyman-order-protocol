@@ -352,26 +352,50 @@ end
 
 
 @public()
-func collect(order_id: int):
+func collect(order_id: int, order_type: bytes[1]):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
-    assert(order.collected_target_amount)
+    int target_asset_id
+    int collected_target_amount
+    int fee_rate
 
-    int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
+    if order_type == "o":
+        box<Order> order = OpenBox(Concat("o", itob(order_id)))
+        target_asset_id = order.target_asset_id
+        collected_target_amount = order.collected_target_amount
+        fee_rate = order.fee_rate
+
+        order.collected_target_amount = 0
+
+        bytes order_data
+        _, order_data = box_get(order)
+        log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+
+    elif order_type == "r":
+        box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id)))
+        target_asset_id = recurring_order.target_asset_id
+        collected_target_amount = recurring_order.collected_target_amount
+        fee_rate = recurring_order.fee_rate
+
+        recurring_order.collected_target_amount = 0
+
+        bytes recurring_order_data
+        _, recurring_order_data = box_get(recurring_order)
+        log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), recurring_order_data))
+    else:
+        exit(1)
+    end
+
+    assert(collected_target_amount)
+
+    int fee_amount = calculate_fee_amount(collected_target_amount, fee_rate)
     assert(fee_amount)
 
-    transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
-
-    int collected_target_amount = order.collected_target_amount
-    order.collected_target_amount = 0
+    transfer(target_asset_id, (collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+    transfer(target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
     # Logs
-    bytes order_data
-    _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
 
     return

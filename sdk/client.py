@@ -266,10 +266,16 @@ class OrderingClient(BaseClient):
 
         return txn
 
-    def collect(self, order_id: int):
+    def collect(self, order_id: int, order_type: str):
         sp = self.get_suggested_params()
 
-        order_box_name = self.get_order_box_name(order_id)
+        if order_type == "o":
+            order_box_name = self.get_order_box_name(order_id)
+        elif order_type == "r":
+            order_box_name = self.get_recurring_order_box_name(order_id)
+        else:
+            raise NotImplementedError()
+
         order = self.get_box(order_box_name, "Order")
 
         transactions = [
@@ -280,7 +286,8 @@ class OrderingClient(BaseClient):
                 index=self.app_id,
                 app_args=[
                     "collect",
-                    int_to_bytes(order_id)
+                    int_to_bytes(order_id),
+                    order_type
                 ],
                 boxes=[
                     (0, order_box_name),

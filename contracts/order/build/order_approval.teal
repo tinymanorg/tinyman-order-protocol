@@ -154,6 +154,7 @@ route_end_execute_recurring_order:
 route_collect:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
     txna ApplicationArgs 1; btoi 
+    txna ApplicationArgs 2; dup; len; pushint 1; ==; assert// Bytes Size Assertion: 1 bytes
     callsub __func__collect
     pushint 1; return
 
@@ -957,87 +958,163 @@ __func__end_execute_order:
     retsub
 
 
-// tl:355: func collect(order_id: int):
+// tl:355: func collect(order_id: int, order_type: bytes[1]):
 __func__collect:
-    store 49                                                // order_id [int]
-    // tl:356: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 50]
+    store 49                                                // order_type [bytes[1]]
+    store 50                                                // order_id [int]
+    // tl:356: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 51]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
-    store 50                                                // user_address
+    store 51                                                // user_address
     // tl:357: assert(Txn.Sender == user_address)
     txn Sender
-    load 50                                                 // user_address
+    load 51                                                 // user_address
     ==
     assert
-    // tl:358: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 51]
+    
+    // tl:359: int target_asset_id [slot 52]
+    // tl:360: int collected_target_amount [slot 53]
+    // tl:361: int fee_rate [slot 54]
+    
+    // tl:363: if order_type == "o":
+    load 49                                                 // order_type
     pushbytes "o"
-    load 49                                                 // order_id
-    itob
-    concat
-    dup; box_len; assert; pushint 80; ==; assert            // len(box) == Order.size
-    store 51                                                // box:order
+    ==
+    bz l7_elif_0
+    // then:
+        // tl:364: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 55]
+        pushbytes "o"
+        load 50                                             // order_id
+        itob
+        concat
+        dup; box_len; assert; pushint 80; ==; assert        // len(box) == Order.size
+        store 55                                            // box:order
+        // tl:365: target_asset_id = order.target_asset_id
+        load 55; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
+        store 52                                            // target_asset_id
+        // tl:366: collected_target_amount = order.collected_target_amount
+        load 55; pushint 40; pushint 8; box_extract; btoi// order.collected_target_amount
+        store 53                                            // collected_target_amount
+        // tl:367: fee_rate = order.fee_rate
+        load 55; pushint 56; pushint 8; box_extract; btoi// order.fee_rate
+        store 54                                            // fee_rate
+        
+        // tl:369: order.collected_target_amount = 0
+        pushint 0
+        itob
+        load 55
+        pushint 40
+        uncover 2
+        box_replace
+        // boxset order.collected_target_amount
+        
+        // tl:371: bytes order_data [slot 56]
+        // tl:372: _, order_data = box_get(order)
+        load 55                                             // order
+        box_get
+        pop                                                 // discarding value for _
+        store 56                                            // order_data
+        // tl:373: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+        pushbytes 0xc953e07a                                // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+        load 51                                             // user_address
+        load 50                                             // order_id
+        itob
+        load 56                                             // order_data
+        concat
+        concat
+        concat
+        log
+        
+        b l7_end
+    l7_elif_0:
+    // tl:375: elif order_type == "r":
+        load 49                                             // order_type
+        pushbytes "r"
+        ==
+        bz l7_else
+            // tl:376: box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id))) [slot 57]
+            pushbytes "r"
+            load 50                                         // order_id
+            itob
+            concat
+            dup; box_len; assert; pushint 96; ==; assert    // len(box) == RecurringOrder.size
+            store 57                                        // box:recurring_order
+            // tl:377: target_asset_id = recurring_order.target_asset_id
+            load 57; pushint 16; pushint 8; box_extract; btoi// recurring_order.target_asset_id
+            store 52                                        // target_asset_id
+            // tl:378: collected_target_amount = recurring_order.collected_target_amount
+            load 57; pushint 32; pushint 8; box_extract; btoi// recurring_order.collected_target_amount
+            store 53                                        // collected_target_amount
+            // tl:379: fee_rate = recurring_order.fee_rate
+            load 57; pushint 64; pushint 8; box_extract; btoi// recurring_order.fee_rate
+            store 54                                        // fee_rate
+            
+            // tl:381: recurring_order.collected_target_amount = 0
+            pushint 0
+            itob
+            load 57
+            pushint 32
+            uncover 2
+            box_replace
+            // boxset recurring_order.collected_target_amount
+            
+            // tl:383: bytes recurring_order_data [slot 58]
+            // tl:384: _, recurring_order_data = box_get(recurring_order)
+            load 57                                         // recurring_order
+            box_get
+            pop                                             // discarding value for _
+            store 58                                        // recurring_order_data
+            // tl:385: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), recurring_order_data))
+            pushbytes 0x5e044159                            // SHA512_256("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+            load 51                                         // user_address
+            load 50                                         // order_id
+            itob
+            load 58                                         // recurring_order_data
+            concat
+            concat
+            concat
+            log
+            b l7_end
+    l7_else:
+    // tl:386: else:
+        // tl:387: exit(1)
+        pushint 1
+        return
+    l7_end:
     
-    // tl:360: assert(order.collected_target_amount)
-    load 51; pushint 40; pushint 8; box_extract; btoi// order.collected_target_amount
+    // tl:390: assert(collected_target_amount)
+    load 53                                                 // collected_target_amount
     assert
     
-    // tl:362: int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate) [slot 52]
-    load 51; pushint 40; pushint 8; box_extract; btoi// order.collected_target_amount
-    load 51; pushint 56; pushint 8; box_extract; btoi// order.fee_rate
+    // tl:392: int fee_amount = calculate_fee_amount(collected_target_amount, fee_rate) [slot 59]
+    load 53                                                 // collected_target_amount
+    load 54                                                 // fee_rate
     callsub __func__calculate_fee_amount
-    store 52                                                // fee_amount
-    // tl:363: assert(fee_amount)
-    load 52                                                 // fee_amount
+    store 59                                                // fee_amount
+    // tl:393: assert(fee_amount)
+    load 59                                                 // fee_amount
     assert
     
-    // tl:365: transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-    load 51; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
-    load 51; pushint 40; pushint 8; box_extract; btoi// order.collected_target_amount
-    load 52                                                 // fee_amount
+    // tl:395: transfer(target_asset_id, (collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+    load 52                                                 // target_asset_id
+    load 53                                                 // collected_target_amount
+    load 59                                                 // fee_amount
     -
     global CurrentApplicationAddress
-    load 50                                                 // user_address
+    load 51                                                 // user_address
     callsub __func__transfer
-    // tl:366: transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
-    load 51; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
-    load 52                                                 // fee_amount
+    // tl:396: transfer(target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+    load 52                                                 // target_asset_id
+    load 59                                                 // fee_amount
     global CurrentApplicationAddress
     pushbytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY              // "registry_app_account_address"
     app_global_get
     callsub __func__transfer
     
-    // tl:368: int collected_target_amount = order.collected_target_amount [slot 53]
-    load 51; pushint 40; pushint 8; box_extract; btoi// order.collected_target_amount
-    store 53                                                // collected_target_amount
-    // tl:369: order.collected_target_amount = 0
-    pushint 0
-    itob
-    load 51
-    pushint 40
-    uncover 2
-    box_replace
-    // boxset order.collected_target_amount
-    
     // Logs
-    // tl:372: bytes order_data [slot 54]
-    // tl:373: _, order_data = box_get(order)
-    load 51                                                 // order
-    box_get
-    pop                                                     // discarding value for _
-    store 54                                                // order_data
-    // tl:374: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    pushbytes 0xc953e07a                                    // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
-    load 50                                                 // user_address
-    load 49                                                 // order_id
-    itob
-    load 54                                                 // order_data
-    concat
-    concat
-    concat
-    log
-    // tl:375: log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
+    // tl:399: log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
     pushbytes 0x2a061e2b                                    // SHA512_256("collect(uint64,uint64)")[:4]
-    load 49                                                 // order_id
+    load 50                                                 // order_id
     itob
     load 53                                                 // collected_target_amount
     itob
@@ -1045,473 +1122,473 @@ __func__collect:
     concat
     log
     
-    // tl:377: return
+    // tl:401: return
     retsub
 
 
 // Description: Create a recurring order with the monotonically incremented ORDER_COUNT as id.
 // Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 // Permission: App owner (User)
-// tl:385: func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, start_timestamp: int, duration: int):
+// tl:409: func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, start_timestamp: int, duration: int):
 __func__put_recurring_order:
-    store 55                                                // duration [int]
-    store 56                                                // start_timestamp [int]
-    store 57                                                // interval [int]
-    store 58                                                // target_recurrence [int]
-    store 59                                                // target_asset_id [int]
-    store 60                                                // amount [int]
-    store 61                                                // asset_id [int]
-    // tl:386: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 62]
+    store 60                                                // duration [int]
+    store 61                                                // start_timestamp [int]
+    store 62                                                // interval [int]
+    store 63                                                // target_recurrence [int]
+    store 64                                                // target_asset_id [int]
+    store 65                                                // amount [int]
+    store 66                                                // asset_id [int]
+    // tl:410: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 67]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
-    store 62                                                // user_address
-    // tl:387: assert(Txn.Sender == user_address)
+    store 67                                                // user_address
+    // tl:411: assert(Txn.Sender == user_address)
     txn Sender
-    load 62                                                 // user_address
+    load 67                                                 // user_address
     ==
     assert
     
-    // tl:389: int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY) [slot 63]
+    // tl:413: int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY) [slot 68]
     pushbytes TOTAL_ORDER_COUNT_KEY                         // "order_count"
     app_global_get
-    store 63                                                // total_order_count
-    // tl:390: box<RecurringOrder> order = CreateBox(Concat("r", itob(total_order_count))) [slot 64]
+    store 68                                                // total_order_count
+    // tl:414: box<RecurringOrder> order = CreateBox(Concat("r", itob(total_order_count))) [slot 69]
     pushbytes "r"
-    load 63                                                 // total_order_count
+    load 68                                                 // total_order_count
     itob
     concat
     dup; pushint 96; box_create; assert                     // create & assert created
-    store 64                                                // box:order
+    store 69                                                // box:order
     
     // Assertions
-    // tl:393: assert(amount > 0)
-    load 60                                                 // amount
+    // tl:417: assert(amount > 0)
+    load 65                                                 // amount
     pushint 0
     >
     assert
-    // tl:394: assert(asset_id != target_asset_id)
-    load 61                                                 // asset_id
-    load 59                                                 // target_asset_id
+    // tl:418: assert(asset_id != target_asset_id)
+    load 66                                                 // asset_id
+    load 64                                                 // target_asset_id
     !=
     assert
-    // tl:395: assert(target_recurrence > 0)
-    load 58                                                 // target_recurrence
+    // tl:419: assert(target_recurrence > 0)
+    load 63                                                 // target_recurrence
     pushint 0
     >
     assert
-    // tl:396: assert(interval > MINUTE)
-    load 57                                                 // interval
+    // tl:420: assert(interval > MINUTE)
+    load 62                                                 // interval
     pushint MINUTE                                          // 60
     >
     assert
-    // tl:397: assert(!(interval % MINUTE))
-    load 57                                                 // interval
+    // tl:421: assert(!(interval % MINUTE))
+    load 62                                                 // interval
     pushint MINUTE                                          // 60
     %
     !
     assert
     
-    // tl:399: if !start_timestamp:
-    load 56                                                 // start_timestamp
-    !
-    bz l7_else
-    // then:
-        // tl:400: start_timestamp = Global.LatestTimestamp
-        global LatestTimestamp
-        store 56                                            // start_timestamp
-        b l7_end
-    l7_else:
-    // tl:401: else:
-        // tl:402: assert(start_timestamp > Global.LatestTimestamp)
-        load 56                                             // start_timestamp
-        global LatestTimestamp
-        >
-        assert
-    l7_end:
-    
-    // tl:405: int expiration_timestamp [slot 65]
-    // tl:406: if !duration:
-    load 55                                                 // duration
+    // tl:423: if !start_timestamp:
+    load 61                                                 // start_timestamp
     !
     bz l8_else
     // then:
-        // tl:407: expiration_timestamp = MAX_UINT64
-        pushint MAX_UINT64                                  // 18446744073709551615
-        store 65                                            // expiration_timestamp
+        // tl:424: start_timestamp = Global.LatestTimestamp
+        global LatestTimestamp
+        store 61                                            // start_timestamp
         b l8_end
     l8_else:
-    // tl:408: else:
-        // tl:409: expiration_timestamp = Global.LatestTimestamp + duration
+    // tl:425: else:
+        // tl:426: assert(start_timestamp > Global.LatestTimestamp)
+        load 61                                             // start_timestamp
         global LatestTimestamp
-        load 55                                             // duration
-        +
-        store 65                                            // expiration_timestamp
+        >
+        assert
     l8_end:
     
-    // tl:412: assert(expiration_timestamp >= (start_timestamp + (target_recurrence * interval)))
-    load 65                                                 // expiration_timestamp
-    load 56                                                 // start_timestamp
-    load 58                                                 // target_recurrence
-    load 57                                                 // interval
+    // tl:429: int expiration_timestamp [slot 70]
+    // tl:430: if !duration:
+    load 60                                                 // duration
+    !
+    bz l9_else
+    // then:
+        // tl:431: expiration_timestamp = MAX_UINT64
+        pushint MAX_UINT64                                  // 18446744073709551615
+        store 70                                            // expiration_timestamp
+        b l9_end
+    l9_else:
+    // tl:432: else:
+        // tl:433: expiration_timestamp = Global.LatestTimestamp + duration
+        global LatestTimestamp
+        load 60                                             // duration
+        +
+        store 70                                            // expiration_timestamp
+    l9_end:
+    
+    // tl:436: assert(expiration_timestamp >= (start_timestamp + (target_recurrence * interval)))
+    load 70                                                 // expiration_timestamp
+    load 61                                                 // start_timestamp
+    load 63                                                 // target_recurrence
+    load 62                                                 // interval
     *
     +
     >=
     assert
     
-    // tl:414: int is_opted_in_to_target [slot 66]
-    // tl:415: is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
+    // tl:438: int is_opted_in_to_target [slot 71]
+    // tl:439: is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
     global CurrentApplicationAddress
-    load 59                                                 // target_asset_id
+    load 64                                                 // target_asset_id
     asset_holding_get AssetBalance
-    store 66                                                // is_opted_in_to_target
+    store 71                                                // is_opted_in_to_target
     pop                                                     // discarding value for _
-    // tl:416: assert(is_opted_in_to_target)
-    load 66                                                 // is_opted_in_to_target
+    // tl:440: assert(is_opted_in_to_target)
+    load 71                                                 // is_opted_in_to_target
     assert
     
-    // tl:418: check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
+    // tl:442: check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, amount)
     txn GroupIndex
     pushint 1
     -
     global CurrentApplicationAddress
-    load 61                                                 // asset_id
-    load 60                                                 // amount
+    load 66                                                 // asset_id
+    load 65                                                 // amount
     callsub __func__check_received_asset
     
-    // tl:420: int fee_rate = get_fee_rate() [slot 67]
+    // tl:444: int fee_rate = get_fee_rate() [slot 72]
     callsub __func__get_fee_rate
-    store 67                                                // fee_rate
+    store 72                                                // fee_rate
     
-    // tl:422: order.asset_id = asset_id
-    load 61                                                 // asset_id
+    // tl:446: order.asset_id = asset_id
+    load 66                                                 // asset_id
     itob
-    load 64
+    load 69
     pushint 0
     uncover 2
     box_replace
     // boxset order.asset_id
-    // tl:423: order.amount = amount
-    load 60                                                 // amount
+    // tl:447: order.amount = amount
+    load 65                                                 // amount
     itob
-    load 64
+    load 69
     pushint 8
     uncover 2
     box_replace
     // boxset order.amount
-    // tl:424: order.target_asset_id = target_asset_id
-    load 59                                                 // target_asset_id
+    // tl:448: order.target_asset_id = target_asset_id
+    load 64                                                 // target_asset_id
     itob
-    load 64
+    load 69
     pushint 16
     uncover 2
     box_replace
     // boxset order.target_asset_id
-    // tl:425: order.collected_target_amount = 0
+    // tl:449: order.collected_target_amount = 0
     pushint 0
     itob
-    load 64
+    load 69
     pushint 32
     uncover 2
     box_replace
     // boxset order.collected_target_amount
-    // tl:426: order.target_recurrence = target_recurrence
-    load 58                                                 // target_recurrence
+    // tl:450: order.target_recurrence = target_recurrence
+    load 63                                                 // target_recurrence
     itob
-    load 64
+    load 69
     pushint 40
     uncover 2
     box_replace
     // boxset order.target_recurrence
-    // tl:427: order.filled_recurrence = 0
+    // tl:451: order.filled_recurrence = 0
     pushint 0
     itob
-    load 64
+    load 69
     pushint 48
     uncover 2
     box_replace
     // boxset order.filled_recurrence
-    // tl:428: order.interval = interval
-    load 57                                                 // interval
+    // tl:452: order.interval = interval
+    load 62                                                 // interval
     itob
-    load 64
+    load 69
     pushint 56
     uncover 2
     box_replace
     // boxset order.interval
-    // tl:429: order.fee_rate = fee_rate
-    load 67                                                 // fee_rate
+    // tl:453: order.fee_rate = fee_rate
+    load 72                                                 // fee_rate
     itob
-    load 64
+    load 69
     pushint 64
     uncover 2
     box_replace
     // boxset order.fee_rate
-    // tl:430: order.start_timestamp = start_timestamp
-    load 56                                                 // start_timestamp
+    // tl:454: order.start_timestamp = start_timestamp
+    load 61                                                 // start_timestamp
     itob
-    load 64
+    load 69
     pushint 72
     uncover 2
     box_replace
     // boxset order.start_timestamp
-    // tl:431: order.creation_timestamp = Global.LatestTimestamp
+    // tl:455: order.creation_timestamp = Global.LatestTimestamp
     global LatestTimestamp
     itob
-    load 64
+    load 69
     pushint 80
     uncover 2
     box_replace
     // boxset order.creation_timestamp
-    // tl:432: order.expiration_timestamp = expiration_timestamp
-    load 65                                                 // expiration_timestamp
+    // tl:456: order.expiration_timestamp = expiration_timestamp
+    load 70                                                 // expiration_timestamp
     itob
-    load 64
+    load 69
     pushint 88
     uncover 2
     box_replace
     // boxset order.expiration_timestamp
     
-    // tl:434: app_global_put(TOTAL_ORDER_COUNT_KEY, total_order_count + 1)
+    // tl:458: app_global_put(TOTAL_ORDER_COUNT_KEY, total_order_count + 1)
     pushbytes TOTAL_ORDER_COUNT_KEY                         // "order_count"
-    load 63                                                 // total_order_count
+    load 68                                                 // total_order_count
     pushint 1
     +
     app_global_put
     
     // Logs
-    // tl:437: bytes order_data [slot 68]
-    // tl:438: _, order_data = box_get(order)
-    load 64                                                 // order
-    box_get
-    pop                                                     // discarding value for _
-    store 68                                                // order_data
-    // tl:439: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
-    pushbytes 0x5e044159                                    // SHA512_256("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
-    load 62                                                 // user_address
-    load 63                                                 // total_order_count
-    itob
-    load 68                                                 // order_data
-    concat
-    concat
-    concat
-    log
-    // tl:440: log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
-    pushbytes 0x87e86a4b                                    // SHA512_256("put_recurring_order(uint64)")[:4]
-    load 63                                                 // total_order_count
-    itob
-    concat
-    log
-    
-    // tl:442: return
-    retsub
-
-
-// Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
-// Prerequisites: If partial filling is utilized, collect method must be called before.
-// Permission: App owner (User)
-// tl:450: func cancel_recurring_order(order_id: int):
-__func__cancel_recurring_order:
-    store 69                                                // order_id [int]
-    // tl:451: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 70]
-    pushbytes USER_ADDRESS_KEY                              // "user_address"
-    app_global_get
-    store 70                                                // user_address
-    // tl:452: assert(Txn.Sender == user_address)
-    txn Sender
-    load 70                                                 // user_address
-    ==
-    assert
-    
-    // tl:454: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 71]
-    pushbytes "r"
-    load 69                                                 // order_id
-    itob
-    concat
-    dup; box_len; assert; pushint 96; ==; assert            // len(box) == RecurringOrder.size
-    store 71                                                // box:order
-    
-    // It is assumed that the order is deleted once it is executed.
-    // Send remaining amount back to user.
-    
-    // tl:459: int remaining_amount = order.amount - order.filled_amount [slot 72]
-    load 71; pushint 8; pushint 8; box_extract; btoi// order.amount
-    load 71; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
-    -
-    store 72                                                // remaining_amount
-    
-    // tl:461: assert(!order.collected_target_amount)
-    load 71; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
-    !
-    assert
-    
-    // tl:463: transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
-    load 71; pushint 0; pushint 8; box_extract; btoi// order.asset_id
-    load 72                                                 // remaining_amount
-    global CurrentApplicationAddress
-    load 70                                                 // user_address
-    callsub __func__transfer
-    
-    // Logs
-    // tl:466: bytes order_data [slot 73]
-    // tl:467: _, order_data = box_get(order)
-    load 71                                                 // order
+    // tl:461: bytes order_data [slot 73]
+    // tl:462: _, order_data = box_get(order)
+    load 69                                                 // order
     box_get
     pop                                                     // discarding value for _
     store 73                                                // order_data
-    // tl:468: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    // tl:463: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     pushbytes 0x5e044159                                    // SHA512_256("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
-    load 70                                                 // user_address
-    load 69                                                 // order_id
+    load 67                                                 // user_address
+    load 68                                                 // total_order_count
     itob
     load 73                                                 // order_data
     concat
     concat
     concat
     log
-    // tl:469: log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
+    // tl:464: log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
+    pushbytes 0x87e86a4b                                    // SHA512_256("put_recurring_order(uint64)")[:4]
+    load 68                                                 // total_order_count
+    itob
+    concat
+    log
+    
+    // tl:466: return
+    retsub
+
+
+// Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
+// Prerequisites: If partial filling is utilized, collect method must be called before.
+// Permission: App owner (User)
+// tl:474: func cancel_recurring_order(order_id: int):
+__func__cancel_recurring_order:
+    store 74                                                // order_id [int]
+    // tl:475: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 75]
+    pushbytes USER_ADDRESS_KEY                              // "user_address"
+    app_global_get
+    store 75                                                // user_address
+    // tl:476: assert(Txn.Sender == user_address)
+    txn Sender
+    load 75                                                 // user_address
+    ==
+    assert
+    
+    // tl:478: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 76]
+    pushbytes "r"
+    load 74                                                 // order_id
+    itob
+    concat
+    dup; box_len; assert; pushint 96; ==; assert            // len(box) == RecurringOrder.size
+    store 76                                                // box:order
+    
+    // It is assumed that the order is deleted once it is executed.
+    // Send remaining amount back to user.
+    
+    // tl:483: int remaining_amount = order.amount - order.filled_amount [slot 77]
+    load 76; pushint 8; pushint 8; box_extract; btoi// order.amount
+    load 76; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
+    -
+    store 77                                                // remaining_amount
+    
+    // tl:485: assert(!order.collected_target_amount)
+    load 76; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
+    !
+    assert
+    
+    // tl:487: transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
+    load 76; pushint 0; pushint 8; box_extract; btoi// order.asset_id
+    load 77                                                 // remaining_amount
+    global CurrentApplicationAddress
+    load 75                                                 // user_address
+    callsub __func__transfer
+    
+    // Logs
+    // tl:490: bytes order_data [slot 78]
+    // tl:491: _, order_data = box_get(order)
+    load 76                                                 // order
+    box_get
+    pop                                                     // discarding value for _
+    store 78                                                // order_data
+    // tl:492: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    pushbytes 0x5e044159                                    // SHA512_256("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+    load 75                                                 // user_address
+    load 74                                                 // order_id
+    itob
+    load 78                                                 // order_data
+    concat
+    concat
+    concat
+    log
+    // tl:493: log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
     pushbytes 0x3e7b0c66                                    // SHA512_256("cancel_recurring_order(uint64)")[:4]
-    load 69                                                 // order_id
+    load 74                                                 // order_id
     itob
     concat
     log
     
     // Delete the box.
-    // tl:472: _ = box_del(order)
-    load 71                                                 // order
+    // tl:496: _ = box_del(order)
+    load 76                                                 // order
     box_del
     pop                                                     // discarding value for _
     
-    // tl:474: return
+    // tl:498: return
     retsub
 
 
 // Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
 // An executor must call `end_execute_recurring_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 // Permission: Everyone
-// tl:482: func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
+// tl:506: func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
 __func__start_execute_recurring_order:
-    store 74                                                // index_diff [int]
-    store 75                                                // fill_amount [int]
-    store 76                                                // order_id [int]
-    // tl:483: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 77]
+    store 79                                                // index_diff [int]
+    store 80                                                // fill_amount [int]
+    store 81                                                // order_id [int]
+    // tl:507: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 82]
     pushbytes "r"
-    load 76                                                 // order_id
+    load 81                                                 // order_id
     itob
     concat
     dup; box_len; assert; pushint 96; ==; assert            // len(box) == RecurringOrder.size
-    store 77                                                // box:order
+    store 82                                                // box:order
     
     // Assertions
-    // tl:486: assert(index_diff >= 2)
-    load 74                                                 // index_diff
+    // tl:510: assert(index_diff >= 2)
+    load 79                                                 // index_diff
     pushint 2
     >=
     assert
     
-    // tl:488: int remaining_recurrence = order.target_recurrence - order.filled_recurrence [slot 78]
-    load 77; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
-    load 77; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
+    // tl:512: int remaining_recurrence = order.target_recurrence - order.filled_recurrence [slot 83]
+    load 82; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
+    load 82; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
     -
-    store 78                                                // remaining_recurrence
-    // tl:489: assert(remaining_recurrence > 0)
-    load 78                                                 // remaining_recurrence
+    store 83                                                // remaining_recurrence
+    // tl:513: assert(remaining_recurrence > 0)
+    load 83                                                 // remaining_recurrence
     pushint 0
     >
     assert
     
     // Assert that Txn.Sender is permissioned to fill recurring orders.
-    // tl:492: check_is_endorsed(Txn.Sender)
+    // tl:516: check_is_endorsed(Txn.Sender)
     txn Sender
     callsub __func__check_is_endorsed
     
-    // tl:494: int recurrence_amount [slot 79]
+    // tl:518: int recurrence_amount [slot 84]
     
     // If it is the last recurrence, all left needs to be filled.
-    // tl:497: if remaining_recurrence == 1:
-    load 78                                                 // remaining_recurrence
+    // tl:521: if remaining_recurrence == 1:
+    load 83                                                 // remaining_recurrence
     pushint 1
     ==
-    bz l9_else
+    bz l10_else
     // then:
-        // tl:498: recurrence_amount = order.amount - order.filled_amount
-        load 77; pushint 8; pushint 8; box_extract; btoi// order.amount
-        load 77; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
+        // tl:522: recurrence_amount = order.amount - order.filled_amount
+        load 82; pushint 8; pushint 8; box_extract; btoi// order.amount
+        load 82; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
         -
-        store 79                                            // recurrence_amount
-        b l9_end
-    l9_else:
-    // tl:499: else:
-        // tl:500: recurrence_amount = order.amount / order.target_recurrence
-        load 77; pushint 8; pushint 8; box_extract; btoi// order.amount
-        load 77; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
+        store 84                                            // recurrence_amount
+        b l10_end
+    l10_else:
+    // tl:523: else:
+        // tl:524: recurrence_amount = order.amount / order.target_recurrence
+        load 82; pushint 8; pushint 8; box_extract; btoi// order.amount
+        load 82; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
         /
-        store 79                                            // recurrence_amount
-    l9_end:
+        store 84                                            // recurrence_amount
+    l10_end:
     
-    // tl:503: assert(fill_amount == recurrence_amount)
-    load 75                                                 // fill_amount
-    load 79                                                 // recurrence_amount
+    // tl:527: assert(fill_amount == recurrence_amount)
+    load 80                                                 // fill_amount
+    load 84                                                 // recurrence_amount
     ==
     assert
     
     // TODO: If a recurrence is missed for fill, give extra time.
     // Timestamp should be in the bounds of [recurrence_timestamp - INTERVAL_TOLERANCE, recurrence_timestamp + INTERVAL_TOLERANCE].
-    // tl:507: int recurrence_timestamp = order.start_timestamp + (order.interval * (order.filled_recurrence + 1)) [slot 80]
-    load 77; pushint 72; pushint 8; box_extract; btoi// order.start_timestamp
-    load 77; pushint 56; pushint 8; box_extract; btoi// order.interval
-    load 77; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
+    // tl:531: int recurrence_timestamp = order.start_timestamp + (order.interval * (order.filled_recurrence + 1)) [slot 85]
+    load 82; pushint 72; pushint 8; box_extract; btoi// order.start_timestamp
+    load 82; pushint 56; pushint 8; box_extract; btoi// order.interval
+    load 82; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
     pushint 1
     +
     *
     +
-    store 80                                                // recurrence_timestamp
-    // tl:508: assert(((recurrence_timestamp - INTERVAL_TOLERANCE) <= Global.LatestTimestamp) && (Global.LatestTimestamp <= (recurrence_timestamp + INTERVAL_TOLERANCE)))
-    load 80                                                 // recurrence_timestamp
+    store 85                                                // recurrence_timestamp
+    // tl:532: assert(((recurrence_timestamp - INTERVAL_TOLERANCE) <= Global.LatestTimestamp) && (Global.LatestTimestamp <= (recurrence_timestamp + INTERVAL_TOLERANCE)))
+    load 85                                                 // recurrence_timestamp
     pushint INTERVAL_TOLERANCE                              // 30
     -
     global LatestTimestamp
     <=
     global LatestTimestamp
-    load 80                                                 // recurrence_timestamp
+    load 85                                                 // recurrence_timestamp
     pushint INTERVAL_TOLERANCE                              // 30
     +
     <=
     &&
     assert
     
-    // tl:510: assert(Global.LatestTimestamp <= order.expiration_timestamp)
+    // tl:534: assert(Global.LatestTimestamp <= order.expiration_timestamp)
     global LatestTimestamp
-    load 77; pushint 88; pushint 8; box_extract; btoi// order.expiration_timestamp
+    load 82; pushint 88; pushint 8; box_extract; btoi// order.expiration_timestamp
     <=
     assert
     
-    // tl:512: int end_execute_order_txn_index = Txn.GroupIndex + index_diff [slot 81]
+    // tl:536: int end_execute_order_txn_index = Txn.GroupIndex + index_diff [slot 86]
     txn GroupIndex
-    load 74                                                 // index_diff
+    load 79                                                 // index_diff
     +
-    store 81                                                // end_execute_order_txn_index
-    // tl:513: check_execute_order_txn(end_execute_order_txn_index, "end_execute_recurring_order", order_id, fill_amount, index_diff)
-    load 81                                                 // end_execute_order_txn_index
+    store 86                                                // end_execute_order_txn_index
+    // tl:537: check_execute_order_txn(end_execute_order_txn_index, "end_execute_recurring_order", order_id, fill_amount, index_diff)
+    load 86                                                 // end_execute_order_txn_index
     pushbytes "end_execute_recurring_order"
-    load 76                                                 // order_id
-    load 75                                                 // fill_amount
-    load 74                                                 // index_diff
+    load 81                                                 // order_id
+    load 80                                                 // fill_amount
+    load 79                                                 // index_diff
     callsub __func__check_execute_order_txn
     
     // Transfer `fill_amount` to executor.
-    // tl:516: transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
-    load 77; pushint 0; pushint 8; box_extract; btoi// order.asset_id
-    load 75                                                 // fill_amount
+    // tl:540: transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
+    load 82; pushint 0; pushint 8; box_extract; btoi// order.asset_id
+    load 80                                                 // fill_amount
     global CurrentApplicationAddress
     txn Sender
     callsub __func__transfer
     
     // Logs
-    // tl:519: log(ARC28Event("start_execute_recurring_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
+    // tl:543: log(ARC28Event("start_execute_recurring_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
     pushbytes 0xddf94f80                                    // SHA512_256("start_execute_recurring_order(address,uint64,address)")[:4]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
-    load 76                                                 // order_id
+    load 81                                                 // order_id
     itob
     txn Sender
     concat
@@ -1519,111 +1596,111 @@ __func__start_execute_recurring_order:
     concat
     log
     
-    // tl:521: return
+    // tl:545: return
     retsub
 
 
 // Description: Method checks the validity of the execution between `start_execute_recurring_order` and `end_execute_recurring_order`.
 // An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
 // Permission: Everyone
-// tl:529: func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
+// tl:553: func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
 __func__end_execute_recurring_order:
-    store 82                                                // index_diff [int]
-    store 83                                                // fill_amount [int]
-    store 84                                                // order_id [int]
-    // tl:530: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 85]
+    store 87                                                // index_diff [int]
+    store 88                                                // fill_amount [int]
+    store 89                                                // order_id [int]
+    // tl:554: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 90]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
-    store 85                                                // user_address
-    // tl:531: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 86]
+    store 90                                                // user_address
+    // tl:555: box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id))) [slot 91]
     pushbytes "r"
-    load 84                                                 // order_id
+    load 89                                                 // order_id
     itob
     concat
     dup; box_len; assert; pushint 96; ==; assert            // len(box) == RecurringOrder.size
-    store 86                                                // box:order
+    store 91                                                // box:order
     
-    // tl:533: int start_execute_order_txn_index = Txn.GroupIndex - index_diff [slot 87]
+    // tl:557: int start_execute_order_txn_index = Txn.GroupIndex - index_diff [slot 92]
     txn GroupIndex
-    load 82                                                 // index_diff
+    load 87                                                 // index_diff
     -
-    store 87                                                // start_execute_order_txn_index
-    // tl:534: check_execute_order_txn(start_execute_order_txn_index, "start_execute_recurring_order", order_id, fill_amount, index_diff)
-    load 87                                                 // start_execute_order_txn_index
+    store 92                                                // start_execute_order_txn_index
+    // tl:558: check_execute_order_txn(start_execute_order_txn_index, "start_execute_recurring_order", order_id, fill_amount, index_diff)
+    load 92                                                 // start_execute_order_txn_index
     pushbytes "start_execute_recurring_order"
-    load 84                                                 // order_id
-    load 83                                                 // fill_amount
-    load 82                                                 // index_diff
+    load 89                                                 // order_id
+    load 88                                                 // fill_amount
+    load 87                                                 // index_diff
     callsub __func__check_execute_order_txn
     
     // Assert that user received the target asset.
-    // tl:537: int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0) [slot 88]
+    // tl:561: int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0) [slot 93]
     txn GroupIndex
     pushint 1
     -
     global CurrentApplicationAddress
-    load 86; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
+    load 91; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
     pushint 0
     callsub __func__check_received_target_asset
-    store 88                                                // received_amount
+    store 93                                                // received_amount
     
-    // tl:539: order.filled_amount = order.filled_amount + fill_amount
-    load 86; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
-    load 83                                                 // fill_amount
+    // tl:563: order.filled_amount = order.filled_amount + fill_amount
+    load 91; pushint 24; pushint 8; box_extract; btoi// order.filled_amount
+    load 88                                                 // fill_amount
     +
     itob
-    load 86
+    load 91
     pushint 24
     uncover 2
     box_replace
     // boxset order.filled_amount
-    // tl:540: order.filled_recurrence = order.filled_recurrence + 1
-    load 86; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
+    // tl:564: order.filled_recurrence = order.filled_recurrence + 1
+    load 91; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
     pushint 1
     +
     itob
-    load 86
+    load 91
     pushint 48
     uncover 2
     box_replace
     // boxset order.filled_recurrence
-    // tl:541: order.collected_target_amount = order.collected_target_amount + received_amount
-    load 86; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
-    load 88                                                 // received_amount
+    // tl:565: order.collected_target_amount = order.collected_target_amount + received_amount
+    load 91; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
+    load 93                                                 // received_amount
     +
     itob
-    load 86
+    load 91
     pushint 32
     uncover 2
     box_replace
     // boxset order.collected_target_amount
     
     // Logs
-    // tl:544: bytes order_data [slot 89]
-    // tl:545: _, order_data = box_get(order)
-    load 86                                                 // order
+    // tl:568: bytes order_data [slot 94]
+    // tl:569: _, order_data = box_get(order)
+    load 91                                                 // order
     box_get
     pop                                                     // discarding value for _
-    store 89                                                // order_data
-    // tl:546: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    store 94                                                // order_data
+    // tl:570: log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     pushbytes 0x5e044159                                    // SHA512_256("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
-    load 85                                                 // user_address
-    load 84                                                 // order_id
+    load 90                                                 // user_address
+    load 89                                                 // order_id
     itob
-    load 89                                                 // order_data
+    load 94                                                 // order_data
     concat
     concat
     concat
     log
-    // tl:547: log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    // tl:571: log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
     pushbytes 0xc9f6f955                                    // SHA512_256("end_execute_recurring_order(address,uint64,address,uint64,uint64)")[:4]
-    load 85                                                 // user_address
-    load 84                                                 // order_id
+    load 90                                                 // user_address
+    load 89                                                 // order_id
     itob
     txn Sender
-    load 83                                                 // fill_amount
+    load 88                                                 // fill_amount
     itob
-    load 88                                                 // received_amount
+    load 93                                                 // received_amount
     itob
     concat
     concat
@@ -1635,433 +1712,433 @@ __func__end_execute_recurring_order:
     // If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
     // If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
     // If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
-    // tl:552: if order.target_recurrence == order.filled_recurrence:
-    load 86; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
-    load 86; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
+    // tl:576: if order.target_recurrence == order.filled_recurrence:
+    load 91; pushint 40; pushint 8; box_extract; btoi// order.target_recurrence
+    load 91; pushint 48; pushint 8; box_extract; btoi// order.filled_recurrence
     ==
-    bz l10_end
+    bz l11_end
     // then:
-        // tl:553: int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate) [slot 90]
-        load 86; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
-        load 86; pushint 64; pushint 8; box_extract; btoi// order.fee_rate
+        // tl:577: int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate) [slot 95]
+        load 91; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
+        load 91; pushint 64; pushint 8; box_extract; btoi// order.fee_rate
         callsub __func__calculate_fee_amount
-        store 90                                            // fee_amount
+        store 95                                            // fee_amount
         
-        // tl:555: transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-        load 86; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
-        load 86; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
-        load 90                                             // fee_amount
+        // tl:579: transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
+        load 91; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
+        load 91; pushint 32; pushint 8; box_extract; btoi// order.collected_target_amount
+        load 95                                             // fee_amount
         -
         global CurrentApplicationAddress
-        load 85                                             // user_address
+        load 90                                             // user_address
         callsub __func__transfer
-        // tl:556: transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
-        load 86; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
-        load 90                                             // fee_amount
+        // tl:580: transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+        load 91; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
+        load 95                                             // fee_amount
         global CurrentApplicationAddress
         pushbytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY          // "registry_app_account_address"
         app_global_get
         callsub __func__transfer
-        // tl:557: _ = box_del(order)
-        load 86                                             // order
+        // tl:581: _ = box_del(order)
+        load 91                                             // order
         box_del
         pop                                                 // discarding value for _
-    l10_end:
+    l11_end:
     
-    // tl:560: return
+    // tl:584: return
     retsub
 
 
-// tl:564: func check_is_endorsed(user_address: bytes[32]):
+// tl:588: func check_is_endorsed(user_address: bytes[32]):
 __func__check_is_endorsed:
-    store 91                                                // user_address [bytes[32]]
-    // tl:565: int exists [slot 92]
-    // tl:566: bytes is_endorsed_bytes [slot 93]
-    // tl:567: int is_endorsed [slot 94]
+    store 96                                                // user_address [bytes[32]]
+    // tl:589: int exists [slot 97]
+    // tl:590: bytes is_endorsed_bytes [slot 98]
+    // tl:591: int is_endorsed [slot 99]
     
-    // tl:569: exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
-    load 91                                                 // user_address
+    // tl:593: exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
+    load 96                                                 // user_address
     pushbytes REGISTRY_APP_ID_KEY                           // "registry_app_id"
     app_global_get
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     app_local_get_ex
-    store 92                                                // exists
-    store 93                                                // is_endorsed_bytes
+    store 97                                                // exists
+    store 98                                                // is_endorsed_bytes
     
-    // tl:571: assert(exists)
-    load 92                                                 // exists
+    // tl:595: assert(exists)
+    load 97                                                 // exists
     assert
     
-    // tl:573: is_endorsed = UncheckedCast(is_endorsed_bytes, int)
-    load 93                                                 // is_endorsed_bytes
-    store 94                                                // is_endorsed
-    // tl:574: assert(is_endorsed)
-    load 94                                                 // is_endorsed
+    // tl:597: is_endorsed = UncheckedCast(is_endorsed_bytes, int)
+    load 98                                                 // is_endorsed_bytes
+    store 99                                                // is_endorsed
+    // tl:598: assert(is_endorsed)
+    load 99                                                 // is_endorsed
     assert
     
-    // tl:576: return
+    // tl:600: return
     retsub
 
 
-// tl:580: func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
+// tl:604: func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
 __func__calculate_minimum_amount:
-    store 95                                                // fill_amount [int]
-    store 96                                                // target_amount [int]
-    store 97                                                // amount [int]
-    // tl:581: bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount) [slot 98]
-    load 96                                                 // target_amount
+    store 100                                               // fill_amount [int]
+    store 101                                               // target_amount [int]
+    store 102                                               // amount [int]
+    // tl:605: bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount) [slot 103]
+    load 101                                                // target_amount
     itob
     pushint RATE_SCALER                                     // 18446744073709551615
     itob
     b*
-    load 97                                                 // amount
+    load 102                                                // amount
     itob
     b/
-    store 98                                                // target_rate
-    // tl:582: int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER)) [slot 99]
-    load 95                                                 // fill_amount
+    store 103                                               // target_rate
+    // tl:606: int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER)) [slot 104]
+    load 100                                                // fill_amount
     itob
-    load 98                                                 // target_rate
+    load 103                                                // target_rate
     b*
     pushint RATE_SCALER                                     // 18446744073709551615
     itob
     b/
     btoi
-    store 99                                                // minimum_amount
-    // tl:583: return minimum_amount
-    load 99                                                 // minimum_amount
+    store 104                                               // minimum_amount
+    // tl:607: return minimum_amount
+    load 104                                                // minimum_amount
     retsub
 
 
-// tl:587: func calculate_fee_amount(target_amount: int, fee_rate: int) int:
+// tl:611: func calculate_fee_amount(target_amount: int, fee_rate: int) int:
 __func__calculate_fee_amount:
-    store 100                                               // fee_rate [int]
-    store 101                                               // target_amount [int]
-    // tl:588: int fee_amount = (target_amount * fee_rate) / 10000 [slot 102]
-    load 101                                                // target_amount
-    load 100                                                // fee_rate
+    store 105                                               // fee_rate [int]
+    store 106                                               // target_amount [int]
+    // tl:612: int fee_amount = (target_amount * fee_rate) / 10000 [slot 107]
+    load 106                                                // target_amount
+    load 105                                                // fee_rate
     *
     pushint 10000
     /
-    store 102                                               // fee_amount
-    // tl:589: return fee_amount
-    load 102                                                // fee_amount
+    store 107                                               // fee_amount
+    // tl:613: return fee_amount
+    load 107                                                // fee_amount
     retsub
 
 
-// tl:593: func get_fee_rate() int:
+// tl:617: func get_fee_rate() int:
 __func__get_fee_rate:
-    // tl:594: bytes threshold_bytes [slot 103]
-    // tl:595: bytes fee_rate_bytes [slot 104]
-    // tl:596: int fee_rate [slot 105]
+    // tl:618: bytes threshold_bytes [slot 108]
+    // tl:619: bytes fee_rate_bytes [slot 109]
+    // tl:620: int fee_rate [slot 110]
     
-    // tl:598: int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes)) [slot 106]
+    // tl:622: int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes)) [slot 111]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
     callsub __func__get_account_voting_power
-    store 106                                               // account_voting_power
-    // tl:599: _, threshold_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD)
+    store 111                                               // account_voting_power
+    // tl:623: _, threshold_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD)
     pushbytes REGISTRY_APP_ID_KEY                           // "registry_app_id"
     app_global_get
     pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
     app_global_get_ex
     pop                                                     // discarding value for _
-    store 103                                               // threshold_bytes
-    // tl:600: int fee_rate_power_threshold = UncheckedCast(threshold_bytes, int) [slot 107]
-    load 103                                                // threshold_bytes
-    store 107                                               // fee_rate_power_threshold
+    store 108                                               // threshold_bytes
+    // tl:624: int fee_rate_power_threshold = UncheckedCast(threshold_bytes, int) [slot 112]
+    load 108                                                // threshold_bytes
+    store 112                                               // fee_rate_power_threshold
     
-    // tl:602: if account_voting_power > fee_rate_power_threshold:
-    load 106                                                // account_voting_power
-    load 107                                                // fee_rate_power_threshold
+    // tl:626: if account_voting_power > fee_rate_power_threshold:
+    load 111                                                // account_voting_power
+    load 112                                                // fee_rate_power_threshold
     >
-    bz l11_else
+    bz l12_else
     // then:
-        // tl:603: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY)
+        // tl:627: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY)
         pushbytes REGISTRY_APP_ID_KEY                       // "registry_app_id"
         app_global_get
         pushbytes GOVERNOR_ORDER_FEE_RATE_KEY               // "governor_order_fee_rate"
         app_global_get_ex
         pop                                                 // discarding value for _
-        store 104                                           // fee_rate_bytes
-        b l11_end
-    l11_else:
-    // tl:604: else:
-        // tl:605: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY)
+        store 109                                           // fee_rate_bytes
+        b l12_end
+    l12_else:
+    // tl:628: else:
+        // tl:629: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY)
         pushbytes REGISTRY_APP_ID_KEY                       // "registry_app_id"
         app_global_get
         pushbytes ORDER_FEE_RATE_KEY                        // "order_fee_rate"
         app_global_get_ex
         pop                                                 // discarding value for _
-        store 104                                           // fee_rate_bytes
-    l11_end:
+        store 109                                           // fee_rate_bytes
+    l12_end:
     
-    // tl:608: fee_rate = UncheckedCast(fee_rate_bytes, int)
-    load 104                                                // fee_rate_bytes
-    store 105                                               // fee_rate
-    // tl:609: return fee_rate
-    load 105                                                // fee_rate
+    // tl:632: fee_rate = UncheckedCast(fee_rate_bytes, int)
+    load 109                                                // fee_rate_bytes
+    store 110                                               // fee_rate
+    // tl:633: return fee_rate
+    load 110                                                // fee_rate
     retsub
 
 
-// tl:613: func get_account_voting_power(address: bytes) int:
+// tl:637: func get_account_voting_power(address: bytes) int:
 __func__get_account_voting_power:
-    store 108                                               // address [bytes]
-    // tl:614: inner_txn:
+    store 113                                               // address [bytes]
+    // tl:638: inner_txn:
     itxn_begin
-        // tl:615: TypeEnum: Appl
+        // tl:639: TypeEnum: Appl
         pushint 6                                           // Appl
         itxn_field TypeEnum
-        // tl:616: ApplicationID: app_global_get(VAULT_APP_ID_KEY)
+        // tl:640: ApplicationID: app_global_get(VAULT_APP_ID_KEY)
         pushbytes VAULT_APP_ID_KEY                          // "vault_app_id"
         app_global_get
         itxn_field ApplicationID
-        // tl:617: ApplicationArgs[0]: "get_tiny_power_of"
+        // tl:641: ApplicationArgs[0]: "get_tiny_power_of"
         pushbytes "get_tiny_power_of"
         itxn_field ApplicationArgs
-        // tl:618: ApplicationArgs[1]: address
-        load 108                                            // address
+        // tl:642: ApplicationArgs[1]: address
+        load 113                                            // address
         itxn_field ApplicationArgs
-        // tl:619: Fee: 0
+        // tl:643: Fee: 0
         pushint 0
         itxn_field Fee
     itxn_submit
     // end inner_txn
-    // tl:621: int voting_power = extract_uint64(Itxn.LastLog, 4) [slot 109]
+    // tl:645: int voting_power = extract_uint64(Itxn.LastLog, 4) [slot 114]
     itxn LastLog
     pushint 4
     extract_uint64
-    store 109                                               // voting_power
-    // tl:622: return voting_power
-    load 109                                                // voting_power
+    store 114                                               // voting_power
+    // tl:646: return voting_power
+    load 114                                                // voting_power
     retsub
 
 
-// tl:626: func opt_in_to_asset_if_needed(asset_id: int):
+// tl:650: func opt_in_to_asset_if_needed(asset_id: int):
 __func__opt_in_to_asset_if_needed:
-    store 110                                               // asset_id [int]
-    // tl:627: if asset_id:
-    load 110                                                // asset_id
-    bz l12_end
+    store 115                                               // asset_id [int]
+    // tl:651: if asset_id:
+    load 115                                                // asset_id
+    bz l13_end
     // then:
-        // tl:628: int is_opted_in [slot 111]
-        // tl:629: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:652: int is_opted_in [slot 116]
+        // tl:653: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
-        load 110                                            // asset_id
+        load 115                                            // asset_id
         asset_holding_get AssetBalance
-        store 111                                           // is_opted_in
+        store 116                                           // is_opted_in
         pop                                                 // discarding value for _
         
-        // tl:631: if is_opted_in == 0:
-        load 111                                            // is_opted_in
+        // tl:655: if is_opted_in == 0:
+        load 116                                            // is_opted_in
         pushint 0
         ==
-        bz l13_end
+        bz l14_end
         // then:
-            // tl:632: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
-            load 110                                        // asset_id
+            // tl:656: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            load 115                                        // asset_id
             pushint 0
             global CurrentApplicationAddress
             global CurrentApplicationAddress
             callsub __func__transfer
-        l13_end:
-    l12_end:
-    // tl:635: return
+        l14_end:
+    l13_end:
+    // tl:659: return
     retsub
 
 
-// tl:639: func check_received_asset(txn_index: int, receiver: bytes, asset_id: int, amount: int):
+// tl:663: func check_received_asset(txn_index: int, receiver: bytes, asset_id: int, amount: int):
 __func__check_received_asset:
-    store 112                                               // amount [int]
-    store 113                                               // asset_id [int]
-    store 114                                               // receiver [bytes]
-    store 115                                               // txn_index [int]
-    // tl:640: if !asset_id:
-    load 113                                                // asset_id
-    !
-    bz l14_else
-    // then:
-        // tl:641: assert(Gtxn[txn_index].TypeEnum == Pay)
-        load 115                                            // txn_index
-        gtxns TypeEnum
-        pushint 1                                           // Pay
-        ==
-        assert
-        // tl:642: assert(Gtxn[txn_index].Receiver == receiver)
-        load 115                                            // txn_index
-        gtxns Receiver
-        load 114                                            // receiver
-        ==
-        assert
-        // tl:643: assert(Gtxn[txn_index].Amount == amount)
-        load 115                                            // txn_index
-        gtxns Amount
-        load 112                                            // amount
-        ==
-        assert
-        b l14_end
-    l14_else:
-    // tl:644: else:
-        // tl:645: assert(Gtxn[txn_index].TypeEnum == Axfer)
-        load 115                                            // txn_index
-        gtxns TypeEnum
-        pushint 4                                           // Axfer
-        ==
-        assert
-        // tl:646: assert(Gtxn[txn_index].AssetReceiver == receiver)
-        load 115                                            // txn_index
-        gtxns AssetReceiver
-        load 114                                            // receiver
-        ==
-        assert
-        // tl:647: assert(Gtxn[txn_index].XferAsset == asset_id)
-        load 115                                            // txn_index
-        gtxns XferAsset
-        load 113                                            // asset_id
-        ==
-        assert
-        // tl:648: assert(Gtxn[txn_index].AssetAmount == amount)
-        load 115                                            // txn_index
-        gtxns AssetAmount
-        load 112                                            // amount
-        ==
-        assert
-    l14_end:
-    // tl:650: return
-    retsub
-
-
-// tl:654: func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int) int:
-__func__check_received_target_asset:
-    store 116                                               // minimum_amount [int]
-    store 117                                               // asset_id [int]
-    store 118                                               // receiver [bytes]
-    store 119                                               // txn_index [int]
-    // tl:655: int received_amount [slot 120]
-    // tl:656: if !asset_id:
-    load 117                                                // asset_id
+    store 117                                               // amount [int]
+    store 118                                               // asset_id [int]
+    store 119                                               // receiver [bytes]
+    store 120                                               // txn_index [int]
+    // tl:664: if !asset_id:
+    load 118                                                // asset_id
     !
     bz l15_else
     // then:
-        // tl:657: assert(Gtxn[txn_index].TypeEnum == Pay)
-        load 119                                            // txn_index
+        // tl:665: assert(Gtxn[txn_index].TypeEnum == Pay)
+        load 120                                            // txn_index
         gtxns TypeEnum
         pushint 1                                           // Pay
         ==
         assert
-        // tl:658: assert(Gtxn[txn_index].Receiver == receiver)
-        load 119                                            // txn_index
+        // tl:666: assert(Gtxn[txn_index].Receiver == receiver)
+        load 120                                            // txn_index
         gtxns Receiver
-        load 118                                            // receiver
+        load 119                                            // receiver
         ==
         assert
-        // tl:659: assert(Gtxn[txn_index].Amount >= minimum_amount)
-        load 119                                            // txn_index
+        // tl:667: assert(Gtxn[txn_index].Amount == amount)
+        load 120                                            // txn_index
         gtxns Amount
-        load 116                                            // minimum_amount
-        >=
+        load 117                                            // amount
+        ==
         assert
-        
-        // tl:661: received_amount = Gtxn[txn_index].Amount
-        load 119                                            // txn_index
-        gtxns Amount
-        store 120                                           // received_amount
         b l15_end
     l15_else:
-    // tl:662: else:
-        // tl:663: assert(Gtxn[txn_index].TypeEnum == Axfer)
-        load 119                                            // txn_index
+    // tl:668: else:
+        // tl:669: assert(Gtxn[txn_index].TypeEnum == Axfer)
+        load 120                                            // txn_index
         gtxns TypeEnum
         pushint 4                                           // Axfer
         ==
         assert
-        // tl:664: assert(Gtxn[txn_index].AssetReceiver == receiver)
-        load 119                                            // txn_index
+        // tl:670: assert(Gtxn[txn_index].AssetReceiver == receiver)
+        load 120                                            // txn_index
         gtxns AssetReceiver
-        load 118                                            // receiver
+        load 119                                            // receiver
         ==
         assert
-        // tl:665: assert(Gtxn[txn_index].XferAsset == asset_id)
-        load 119                                            // txn_index
+        // tl:671: assert(Gtxn[txn_index].XferAsset == asset_id)
+        load 120                                            // txn_index
         gtxns XferAsset
-        load 117                                            // asset_id
+        load 118                                            // asset_id
         ==
         assert
-        // tl:666: assert(Gtxn[txn_index].AssetAmount >= minimum_amount)
-        load 119                                            // txn_index
+        // tl:672: assert(Gtxn[txn_index].AssetAmount == amount)
+        load 120                                            // txn_index
         gtxns AssetAmount
-        load 116                                            // minimum_amount
-        >=
+        load 117                                            // amount
+        ==
         assert
-        
-        // tl:668: received_amount = Gtxn[txn_index].AssetAmount
-        load 119                                            // txn_index
-        gtxns AssetAmount
-        store 120                                           // received_amount
     l15_end:
-    
-    // tl:671: return received_amount
-    load 120                                                // received_amount
+    // tl:674: return
     retsub
 
 
-// tl:675: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
-__func__transfer:
-    store 121                                               // receiver [bytes]
-    store 122                                               // sender [bytes]
-    store 123                                               // amount [int]
-    store 124                                               // asset_id [int]
-    // tl:676: if !asset_id:
-    load 124                                                // asset_id
+// tl:678: func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int) int:
+__func__check_received_target_asset:
+    store 121                                               // minimum_amount [int]
+    store 122                                               // asset_id [int]
+    store 123                                               // receiver [bytes]
+    store 124                                               // txn_index [int]
+    // tl:679: int received_amount [slot 125]
+    // tl:680: if !asset_id:
+    load 122                                                // asset_id
     !
     bz l16_else
     // then:
-        // tl:677: inner_txn:
-        itxn_begin
-            // tl:678: TypeEnum: Pay
-            pushint 1                                       // Pay
-            itxn_field TypeEnum
-            // tl:679: Sender: sender
-            load 122                                        // sender
-            itxn_field Sender
-            // tl:680: Receiver: receiver
-            load 121                                        // receiver
-            itxn_field Receiver
-            // tl:681: Amount: amount
-            load 123                                        // amount
-            itxn_field Amount
-            // tl:682: Fee: 0
-            pushint 0
-            itxn_field Fee
-        itxn_submit
-        // end inner_txn
+        // tl:681: assert(Gtxn[txn_index].TypeEnum == Pay)
+        load 124                                            // txn_index
+        gtxns TypeEnum
+        pushint 1                                           // Pay
+        ==
+        assert
+        // tl:682: assert(Gtxn[txn_index].Receiver == receiver)
+        load 124                                            // txn_index
+        gtxns Receiver
+        load 123                                            // receiver
+        ==
+        assert
+        // tl:683: assert(Gtxn[txn_index].Amount >= minimum_amount)
+        load 124                                            // txn_index
+        gtxns Amount
+        load 121                                            // minimum_amount
+        >=
+        assert
+        
+        // tl:685: received_amount = Gtxn[txn_index].Amount
+        load 124                                            // txn_index
+        gtxns Amount
+        store 125                                           // received_amount
         b l16_end
     l16_else:
-    // tl:684: else:
-        // tl:685: inner_txn:
+    // tl:686: else:
+        // tl:687: assert(Gtxn[txn_index].TypeEnum == Axfer)
+        load 124                                            // txn_index
+        gtxns TypeEnum
+        pushint 4                                           // Axfer
+        ==
+        assert
+        // tl:688: assert(Gtxn[txn_index].AssetReceiver == receiver)
+        load 124                                            // txn_index
+        gtxns AssetReceiver
+        load 123                                            // receiver
+        ==
+        assert
+        // tl:689: assert(Gtxn[txn_index].XferAsset == asset_id)
+        load 124                                            // txn_index
+        gtxns XferAsset
+        load 122                                            // asset_id
+        ==
+        assert
+        // tl:690: assert(Gtxn[txn_index].AssetAmount >= minimum_amount)
+        load 124                                            // txn_index
+        gtxns AssetAmount
+        load 121                                            // minimum_amount
+        >=
+        assert
+        
+        // tl:692: received_amount = Gtxn[txn_index].AssetAmount
+        load 124                                            // txn_index
+        gtxns AssetAmount
+        store 125                                           // received_amount
+    l16_end:
+    
+    // tl:695: return received_amount
+    load 125                                                // received_amount
+    retsub
+
+
+// tl:699: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+__func__transfer:
+    store 126                                               // receiver [bytes]
+    store 127                                               // sender [bytes]
+    store 128                                               // amount [int]
+    store 129                                               // asset_id [int]
+    // tl:700: if !asset_id:
+    load 129                                                // asset_id
+    !
+    bz l17_else
+    // then:
+        // tl:701: inner_txn:
         itxn_begin
-            // tl:686: TypeEnum: Axfer
-            pushint 4                                       // Axfer
+            // tl:702: TypeEnum: Pay
+            pushint 1                                       // Pay
             itxn_field TypeEnum
-            // tl:687: Sender: sender
-            load 122                                        // sender
+            // tl:703: Sender: sender
+            load 127                                        // sender
             itxn_field Sender
-            // tl:688: AssetReceiver: receiver
-            load 121                                        // receiver
-            itxn_field AssetReceiver
-            // tl:689: AssetAmount: amount
-            load 123                                        // amount
-            itxn_field AssetAmount
-            // tl:690: XferAsset: asset_id
-            load 124                                        // asset_id
-            itxn_field XferAsset
-            // tl:691: Fee: 0
+            // tl:704: Receiver: receiver
+            load 126                                        // receiver
+            itxn_field Receiver
+            // tl:705: Amount: amount
+            load 128                                        // amount
+            itxn_field Amount
+            // tl:706: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
-    l16_end:
-    // tl:694: return
+        b l17_end
+    l17_else:
+    // tl:708: else:
+        // tl:709: inner_txn:
+        itxn_begin
+            // tl:710: TypeEnum: Axfer
+            pushint 4                                       // Axfer
+            itxn_field TypeEnum
+            // tl:711: Sender: sender
+            load 127                                        // sender
+            itxn_field Sender
+            // tl:712: AssetReceiver: receiver
+            load 126                                        // receiver
+            itxn_field AssetReceiver
+            // tl:713: AssetAmount: amount
+            load 128                                        // amount
+            itxn_field AssetAmount
+            // tl:714: XferAsset: asset_id
+            load 129                                        // asset_id
+            itxn_field XferAsset
+            // tl:715: Fee: 0
+            pushint 0
+            itxn_field Fee
+        itxn_submit
+        // end inner_txn
+    l17_end:
+    // tl:718: return
     retsub
 
 
