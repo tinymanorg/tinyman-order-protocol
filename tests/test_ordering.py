@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from random import randint
 
 from algojig.exceptions import LogicEvalError
 from algosdk import transaction
@@ -1043,3 +1044,216 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order.start_timestamp, now + DAY)
         self.assertEqual(recurring_order.creation_timestamp, now + DAY)
         self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
+
+    def test_execute_recurring_order_noendorse_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        target_recurrence = 7
+        interval = DAY
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_recurring_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_recurrence=target_recurrence,
+            interval=interval,
+            start_timestamp=0,
+            duration=4 * WEEK
+        )
+
+        # Execute Recurring Order
+        # Simulate Swap by sending the `target_amount` from filler account.
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+
+        fill_amount = 100_000 // target_recurrence
+        bought_target_amount = 15_000
+        sp = filler_client.get_suggested_params()
+        transactions = [
+            filler_client.prepare_start_execute_recurring_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_target_amount,
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_recurring_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+        ]
+
+        self.ledger.next_timestamp = now + DAY + DAY
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
+
+        with self.assertRaises(LogicEvalError) as e:
+            filler_client._submit(transactions, additional_fees=3)
+        self.assertEqual(e.exception.source['line'], 'exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)')
+
+    def test_subsequent_fill_successful(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        target_recurrence = 7
+        interval = DAY
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_recurring_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_recurrence=target_recurrence,
+            interval=interval,
+            start_timestamp=0,
+            duration=4 * WEEK
+        )
+
+        # Execute Recurring Order
+        # Simulate Swap by sending the `target_amount` from filler account.
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 1_000_000, self.tiny_asset_id)
+
+        self.ledger.next_timestamp = now + DAY + 1
+        filler_client.registry_user_opt_in()
+
+        self.ledger.next_timestamp = now + DAY + 2
+        self.manager_client.endorse(filler_client.user_address)
+
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
+
+        amount = 100_000
+        filled_amount = 0
+        collected_target_amount = 0
+        for current_recurrence in range(target_recurrence):
+            if (current_recurrence + 1) == target_recurrence:
+                fill_amount = amount - filled_amount
+            else:
+                fill_amount = 100_000 // target_recurrence
+
+            bought_target_amount = 15_000 + randint(0, 1000)
+
+            sp = filler_client.get_suggested_params()
+            transactions = [
+                filler_client.prepare_start_execute_recurring_order_transaction(
+                    order_app_id=self.ordering_client.app_id,
+                    order_id=0,
+                    account_address=self.ordering_client.user_address,
+                    fill_amount=fill_amount,
+                    index_diff=2,
+                    sp=sp
+                ),
+                transaction.AssetTransferTxn(
+                    sender=filler_client.user_address,
+                    sp=sp,
+                    receiver=self.ordering_client.application_address,
+                    amt=bought_target_amount,
+                    index=self.tiny_asset_id
+                ),
+                filler_client.prepare_end_execute_recurring_order_transaction(
+                    order_app_id=self.ordering_client.app_id,
+                    order_id=0,
+                    account_address=self.ordering_client.user_address,
+                    fill_amount=fill_amount,
+                    index_diff=2,
+                    sp=sp
+                ),
+            ]
+
+            self.ledger.next_timestamp = now + DAY + DAY * (current_recurrence + 1)
+            filler_client._submit(transactions, additional_fees=3)
+
+            filled_amount += fill_amount
+            collected_target_amount += bought_target_amount
+
+            # Box is deleted.
+            if (current_recurrence + 1) == target_recurrence:
+                continue
+
+            recurring_order = self.ordering_client.get_box(self.ordering_client.get_recurring_order_box_name(0), "RecurringOrder")
+            self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
+            self.assertEqual(recurring_order.amount, 100_000)
+            self.assertEqual(recurring_order.target_asset_id, self.tiny_asset_id)
+            self.assertEqual(recurring_order.filled_amount, filled_amount)
+            self.assertEqual(recurring_order.collected_target_amount, collected_target_amount)
+            self.assertEqual(recurring_order.target_recurrence, target_recurrence)
+            self.assertEqual(recurring_order.filled_recurrence, (current_recurrence + 1))
+            self.assertEqual(recurring_order.interval, interval)
+            self.assertEqual(recurring_order.fee_rate, 30)
+            self.assertEqual(recurring_order.start_timestamp, now + DAY)
+            self.assertEqual(recurring_order.creation_timestamp, now + DAY)
+            self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        start_execute_txn = block_txns[0]
+        end_execute_txn = block_txns[2]
+
+        events = decode_logs(start_execute_txn[b'dt'][b'lg'], ordering_events)
+
+        self.assertEqual(len(events), 1)
+        start_execute_order_event = events[0]
+
+        self.assertEqual(start_execute_order_event['order_id'], 0)
+        self.assertEqual(start_execute_order_event['filler_address'], filler_client.user_address)
+
+        events = decode_logs(end_execute_txn[b'dt'][b'lg'], ordering_events)
+        self.assertEqual(len(events), 2)
+        recurring_order_event = events[0]
+        end_execute_order_event = events[1]
+
+        self.assertEqual(recurring_order_event['user_address'], self.user_address)
+        self.assertEqual(recurring_order_event['order_id'], 0)
+        self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(recurring_order_event['amount'], 100_000)
+        self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(recurring_order_event['filled_amount'], filled_amount)
+        self.assertEqual(recurring_order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
+        self.assertEqual(recurring_order_event['filled_recurrence'], target_recurrence)
+        self.assertEqual(recurring_order_event['interval'], interval)
+        self.assertEqual(recurring_order_event['fee_rate'], 30)
+        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
+
+        self.assertEqual(end_execute_order_event['user_address'], self.user_address)
+        self.assertEqual(end_execute_order_event['order_id'], 0)
+        self.assertEqual(end_execute_order_event['filler_address'], filler_client.user_address)
+        self.assertEqual(end_execute_order_event['fill_amount'], fill_amount)
+        self.assertEqual(end_execute_order_event['bought_amount'], bought_target_amount)
