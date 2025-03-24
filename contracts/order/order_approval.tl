@@ -258,6 +258,19 @@ func cancel_order(order_id: int):
 end
 
 
+func check_execute_order_txn(txn_index: int, method_name: bytes, order_id: int, fill_amount: int, index_diff: int):
+    assert(Gtxn[txn_index].Sender == Txn.Sender)
+    assert(Gtxn[txn_index].TypeEnum == Appl)
+    assert(Gtxn[txn_index].OnCompletion == NoOp)
+    assert(Gtxn[txn_index].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[txn_index].ApplicationArgs[0] == method_name)
+    assert(Gtxn[txn_index].ApplicationArgs[1] == itob(order_id))
+    assert(Gtxn[txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[txn_index].ApplicationArgs[3] == itob(index_diff))
+    return
+end
+
+
 # Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
 # An executor must call `end_execute_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 # Permission: Everyone
@@ -280,15 +293,7 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Global.LatestTimestamp <= order.expiration_timestamp)
 
     int end_execute_order_txn_index = Txn.GroupIndex + index_diff
-    assert(Gtxn[end_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[end_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[end_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[0] == "end_execute_order")
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(end_execute_order_txn_index, "end_execute_order", order_id, fill_amount, index_diff)
 
     # Transfer `fill_amount` to executor.
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
@@ -309,17 +314,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
-
-    # Assertions
-    assert(Gtxn[start_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[start_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[start_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[0] == "start_execute_order")
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(start_execute_order_txn_index, "start_execute_order", order_id, fill_amount, index_diff)
 
     # Assert that user received the target amount or more.
     # TODO: Review the calculations.
@@ -515,15 +510,7 @@ func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: 
     assert(Global.LatestTimestamp <= order.expiration_timestamp)
 
     int end_execute_order_txn_index = Txn.GroupIndex + index_diff
-    assert(Gtxn[end_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[end_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[end_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[0] == "end_execute_recurring_order")
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(end_execute_order_txn_index, "end_execute_recurring_order", order_id, fill_amount, index_diff)
 
     # Transfer `fill_amount` to executor.
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
@@ -544,17 +531,7 @@ func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: in
     box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
-
-    # Assertions
-    assert(Gtxn[start_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[start_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[start_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[0] == "start_execute_recurring_order")
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(start_execute_order_txn_index, "start_execute_recurring_order", order_id, fill_amount, index_diff)
 
     # Assert that user received the target asset.
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0)
