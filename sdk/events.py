@@ -134,15 +134,14 @@ recurring_order_event = Event(
         abi.Argument(arg_type="uint64", name="asset_id"),
         abi.Argument(arg_type="uint64", name="amount"),
         abi.Argument(arg_type="uint64", name="target_asset_id"),
-        abi.Argument(arg_type="uint64", name="filled_amount"),
         abi.Argument(arg_type="uint64", name="collected_target_amount"),
-        abi.Argument(arg_type="uint64", name="target_recurrence"),
-        abi.Argument(arg_type="uint64", name="filled_recurrence"),
+        abi.Argument(arg_type="uint64", name="min_target_amount"),
+        abi.Argument(arg_type="uint64", name="max_target_amount"),
+        abi.Argument(arg_type="uint64", name="remaining_recurrences"),
         abi.Argument(arg_type="uint64", name="interval"),
         abi.Argument(arg_type="uint64", name="fee_rate"),
-        abi.Argument(arg_type="uint64", name="start_timestamp"),
-        abi.Argument(arg_type="uint64", name="creation_timestamp"),
-        abi.Argument(arg_type="uint64", name="expiration_timestamp")
+        abi.Argument(arg_type="uint64", name="last_fill_timestamp"),
+        abi.Argument(arg_type="uint64", name="creation_timestamp")
     ]
 )
 

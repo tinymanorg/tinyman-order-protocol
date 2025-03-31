@@ -15,7 +15,7 @@ from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
 from sdk.structs import Order
 
-from tests.constants import order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY
+from tests.constants import order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -777,7 +777,7 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
         # Put Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -787,9 +787,9 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
             interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
         )
 
         block = self.ledger.last_block
@@ -806,15 +806,14 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
         self.assertEqual(recurring_order_event['amount'], 100_000)
         self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
-        self.assertEqual(recurring_order_event['filled_amount'], 0)
         self.assertEqual(recurring_order_event['collected_target_amount'], 0)
-        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
-        self.assertEqual(recurring_order_event['filled_recurrence'], 0)
+        self.assertEqual(recurring_order_event['remaining_recurrences'], target_recurrence)
+        self.assertEqual(recurring_order_event['min_target_amount'], 0)
+        self.assertEqual(recurring_order_event['max_target_amount'], MAX_UINT64)
         self.assertEqual(recurring_order_event['interval'], interval)
         self.assertEqual(recurring_order_event['fee_rate'], 30)
-        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['last_fill_timestamp'], 0)
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
-        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
         self.assertEqual(put_recurring_order_event['order_id'], 0)
 
@@ -822,15 +821,14 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
         self.assertEqual(recurring_order.amount, 100_000)
         self.assertEqual(recurring_order.target_asset_id, self.tiny_asset_id)
-        self.assertEqual(recurring_order.filled_amount, 0)
         self.assertEqual(recurring_order.collected_target_amount, 0)
-        self.assertEqual(recurring_order.target_recurrence, target_recurrence)
-        self.assertEqual(recurring_order.filled_recurrence, 0)
+        self.assertEqual(recurring_order.remaining_recurrences, target_recurrence)
+        self.assertEqual(recurring_order.min_target_amount, 0)
+        self.assertEqual(recurring_order.max_target_amount, MAX_UINT64)
         self.assertEqual(recurring_order.interval, interval)
         self.assertEqual(recurring_order.fee_rate, 30)
-        self.assertEqual(recurring_order.start_timestamp, now + DAY)
+        self.assertEqual(recurring_order.last_fill_timestamp, 0)
         self.assertEqual(recurring_order.creation_timestamp, now + DAY)
-        self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
 
 
 class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
@@ -855,7 +853,7 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         # Put Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -865,9 +863,9 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
             interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
         )
 
         # Cancel Order
@@ -887,15 +885,14 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
         self.assertEqual(recurring_order_event['amount'], 100_000)
         self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
-        self.assertEqual(recurring_order_event['filled_amount'], 0)
         self.assertEqual(recurring_order_event['collected_target_amount'], 0)
-        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
-        self.assertEqual(recurring_order_event['filled_recurrence'], 0)
+        self.assertEqual(recurring_order_event['remaining_recurrences'], target_recurrence)
+        self.assertEqual(recurring_order_event['min_target_amount'], 0)
+        self.assertEqual(recurring_order_event['max_target_amount'], MAX_UINT64)
         self.assertEqual(recurring_order_event['interval'], interval)
         self.assertEqual(recurring_order_event['fee_rate'], 30)
-        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['last_fill_timestamp'], 0)
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
-        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
         self.assertEqual(cancel_recurring_order_event['order_id'], 0)
 
@@ -907,7 +904,7 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.talgo_asset_id)
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.user_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 100_000)
+        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 700_000)
 
 
 class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
@@ -931,7 +928,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -941,9 +938,9 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
             interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
         )
 
         # Execute Recurring Order
@@ -958,7 +955,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 2
         self.manager_client.endorse(filler_client.user_address)
 
-        fill_amount = 100_000 // target_recurrence
+        fill_amount = 100_000
         bought_target_amount = 15_000
         sp = filler_client.get_suggested_params()
         transactions = [
@@ -1015,15 +1012,12 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
         self.assertEqual(recurring_order_event['amount'], 100_000)
         self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
-        self.assertEqual(recurring_order_event['filled_amount'], fill_amount)
         self.assertEqual(recurring_order_event['collected_target_amount'], bought_target_amount)
-        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
-        self.assertEqual(recurring_order_event['filled_recurrence'], 1)
+        self.assertEqual(recurring_order_event['remaining_recurrences'], target_recurrence - 1)
         self.assertEqual(recurring_order_event['interval'], interval)
         self.assertEqual(recurring_order_event['fee_rate'], 30)
-        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['last_fill_timestamp'], now + DAY + DAY)
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
-        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
         self.assertEqual(end_execute_order_event['user_address'], self.user_address)
         self.assertEqual(end_execute_order_event['order_id'], 0)
@@ -1035,15 +1029,12 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
         self.assertEqual(recurring_order.amount, 100_000)
         self.assertEqual(recurring_order.target_asset_id, self.tiny_asset_id)
-        self.assertEqual(recurring_order.filled_amount, fill_amount)
         self.assertEqual(recurring_order.collected_target_amount, bought_target_amount)
-        self.assertEqual(recurring_order.target_recurrence, target_recurrence)
-        self.assertEqual(recurring_order.filled_recurrence, 1)
+        self.assertEqual(recurring_order.remaining_recurrences, target_recurrence - 1)
         self.assertEqual(recurring_order.interval, interval)
         self.assertEqual(recurring_order.fee_rate, 30)
-        self.assertEqual(recurring_order.start_timestamp, now + DAY)
+        self.assertEqual(recurring_order.last_fill_timestamp, now + DAY + DAY)
         self.assertEqual(recurring_order.creation_timestamp, now + DAY)
-        self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
 
     def test_execute_recurring_order_noendorse_fail(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
@@ -1057,7 +1048,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -1067,18 +1058,18 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
             interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
         )
 
         # Execute Recurring Order
         # Simulate Swap by sending the `target_amount` from filler account.
         filler_client = self.get_new_user_client()
         self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, target_recurrence * 15_000, self.tiny_asset_id)
 
-        fill_amount = 100_000 // target_recurrence
+        fill_amount = 100_000
         bought_target_amount = 15_000
         sp = filler_client.get_suggested_params()
         transactions = [
@@ -1127,7 +1118,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -1137,9 +1128,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
-            interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
+            interval=interval
         )
 
         # Execute Recurring Order
@@ -1157,15 +1146,10 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
 
-        amount = 100_000
         filled_amount = 0
+        fill_amount = 100_000
         collected_target_amount = 0
         for current_recurrence in range(target_recurrence):
-            if (current_recurrence + 1) == target_recurrence:
-                fill_amount = amount - filled_amount
-            else:
-                fill_amount = 100_000 // target_recurrence
-
             bought_target_amount = 15_000 + randint(0, 1000)
 
             sp = filler_client.get_suggested_params()
@@ -1209,15 +1193,12 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
             self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
             self.assertEqual(recurring_order.amount, 100_000)
             self.assertEqual(recurring_order.target_asset_id, self.tiny_asset_id)
-            self.assertEqual(recurring_order.filled_amount, filled_amount)
             self.assertEqual(recurring_order.collected_target_amount, collected_target_amount)
-            self.assertEqual(recurring_order.target_recurrence, target_recurrence)
-            self.assertEqual(recurring_order.filled_recurrence, (current_recurrence + 1))
+            self.assertEqual(recurring_order.remaining_recurrences, target_recurrence - (current_recurrence + 1))
             self.assertEqual(recurring_order.interval, interval)
             self.assertEqual(recurring_order.fee_rate, 30)
-            self.assertEqual(recurring_order.start_timestamp, now + DAY)
+            self.assertEqual(recurring_order.last_fill_timestamp, now + DAY + DAY * (current_recurrence + 1))
             self.assertEqual(recurring_order.creation_timestamp, now + DAY)
-            self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -1242,15 +1223,12 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
         self.assertEqual(recurring_order_event['amount'], 100_000)
         self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
-        self.assertEqual(recurring_order_event['filled_amount'], filled_amount)
         self.assertEqual(recurring_order_event['collected_target_amount'], collected_target_amount)
-        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
-        self.assertEqual(recurring_order_event['filled_recurrence'], target_recurrence)
+        self.assertEqual(recurring_order_event['remaining_recurrences'], 0)
         self.assertEqual(recurring_order_event['interval'], interval)
         self.assertEqual(recurring_order_event['fee_rate'], 30)
-        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['last_fill_timestamp'], now + DAY + DAY * (current_recurrence + 1))
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
-        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
         self.assertEqual(end_execute_order_event['user_address'], self.user_address)
         self.assertEqual(end_execute_order_event['order_id'], 0)
@@ -1278,9 +1256,13 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
         # Put Recurring Order
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
-        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
 
         target_recurrence = 7
         interval = DAY
@@ -1290,9 +1272,9 @@ class CollectTests(OrderProtocolBaseTestCase):
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
             target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
             interval=interval,
-            start_timestamp=0,
-            duration=4 * WEEK
         )
 
         # Execute Recurring Order
@@ -1307,7 +1289,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 2
         self.manager_client.endorse(filler_client.user_address)
 
-        fill_amount = 100_000 // target_recurrence
+        fill_amount = 100_000
         bought_target_amount = 15_000
         sp = filler_client.get_suggested_params()
         transactions = [
@@ -1352,6 +1334,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         events = decode_logs(collect_txn[b'dt'][b'lg'], ordering_events)
 
         self.assertEqual(len(events), 2)
+
         recurring_order_event = events[0]
         collect_event = events[1]
 
@@ -1360,15 +1343,12 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['asset_id'], self.talgo_asset_id)
         self.assertEqual(recurring_order_event['amount'], 100_000)
         self.assertEqual(recurring_order_event['target_asset_id'], self.tiny_asset_id)
-        self.assertEqual(recurring_order_event['filled_amount'], fill_amount)
         self.assertEqual(recurring_order_event['collected_target_amount'], 0)
-        self.assertEqual(recurring_order_event['target_recurrence'], target_recurrence)
-        self.assertEqual(recurring_order_event['filled_recurrence'], 1)
+        self.assertEqual(recurring_order_event['remaining_recurrences'], target_recurrence - 1)
         self.assertEqual(recurring_order_event['interval'], interval)
         self.assertEqual(recurring_order_event['fee_rate'], 30)
-        self.assertEqual(recurring_order_event['start_timestamp'], now + DAY)
+        self.assertEqual(recurring_order_event['last_fill_timestamp'], now + DAY + DAY)
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
-        self.assertEqual(recurring_order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
         self.assertEqual(collect_event["order_id"], 0)
         self.assertEqual(collect_event["collected_target_amount"], bought_target_amount)
@@ -1377,15 +1357,12 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
         self.assertEqual(recurring_order.amount, 100_000)
         self.assertEqual(recurring_order.target_asset_id, self.tiny_asset_id)
-        self.assertEqual(recurring_order.filled_amount, fill_amount)
         self.assertEqual(recurring_order.collected_target_amount, 0)
-        self.assertEqual(recurring_order.target_recurrence, target_recurrence)
-        self.assertEqual(recurring_order.filled_recurrence, 1)
+        self.assertEqual(recurring_order.remaining_recurrences, target_recurrence - 1)
         self.assertEqual(recurring_order.interval, interval)
         self.assertEqual(recurring_order.fee_rate, 30)
-        self.assertEqual(recurring_order.start_timestamp, now + DAY)
+        self.assertEqual(recurring_order.last_fill_timestamp, now + DAY + DAY)
         self.assertEqual(recurring_order.creation_timestamp, now + DAY)
-        self.assertEqual(recurring_order.expiration_timestamp, now + DAY + 4 * WEEK)
 
         inner_txns = collect_txn[b'dt'][b'itx']
 

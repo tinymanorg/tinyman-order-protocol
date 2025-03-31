@@ -26,3 +26,5 @@ DAY = 86400
 WEEK = DAY * 7
 
 MAY_1 = int(datetime(2024, 5, 1, tzinfo=timezone.utc).timestamp())
+
+MAX_UINT64 = 18446744073709551615

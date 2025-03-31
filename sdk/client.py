@@ -299,7 +299,7 @@ class OrderingClient(BaseClient):
 
         return self._submit(transactions, additional_fees=2)
 
-    def put_recurring_order(self, asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, start_timestamp: int, duration: int, order_id: int=None):
+    def put_recurring_order(self, asset_id: int, amount: int, target_asset_id: int, target_recurrence: int, interval: int, min_target_amount: int=0, max_target_amount: int=0, order_id: int=None):
         sp = self.get_suggested_params()
 
         if order_id is None:
@@ -313,6 +313,7 @@ class OrderingClient(BaseClient):
         assets_to_optin = [asset_id, target_asset_id]
         assets_to_optin = [aid for aid in assets_to_optin if not self.is_opted_in(self.application_address, aid)]
 
+        total_amount = amount * target_recurrence
         transactions = [
             transaction.PaymentTxn(
                 sender=self.user_address,
@@ -326,14 +327,14 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 receiver=self.application_address,
-                amt=amount
+                amt=total_amount
             ) if asset_id == 0 else
             transaction.AssetTransferTxn(
                 sender=self.user_address,
                 sp=sp,
                 receiver=self.application_address,
                 index=asset_id,
-                amt=amount,
+                amt=total_amount,
             ),
             transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -345,10 +346,10 @@ class OrderingClient(BaseClient):
                     int_to_bytes(asset_id),
                     int_to_bytes(amount),
                     int_to_bytes(target_asset_id),
+                    int_to_bytes(min_target_amount),
+                    int_to_bytes(max_target_amount),
                     int_to_bytes(target_recurrence),
                     int_to_bytes(interval),
-                    int_to_bytes(start_timestamp),
-                    int_to_bytes(duration)
                 ],
                 foreign_assets=[target_asset_id],
                 foreign_apps=[self.registry_app_id, self.vault_app_id],
