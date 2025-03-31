@@ -328,7 +328,12 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, minimum_amount)
 
     order.filled_amount = order.filled_amount + fill_amount
-    order.collected_target_amount = order.collected_target_amount + received_amount
+
+    # Calculate the amount after feeing.
+    int fee_amount = calculate_fee_amount(received_amount, order.fee_rate)
+    assert(fee_amount)
+
+    order.collected_target_amount = order.collected_target_amount + (received_amount - fee_amount)
 
     # Logs
     bytes order_data
@@ -336,14 +341,11 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
-    # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
-    # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
-    # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
-    if order.amount == order.filled_amount:
-        int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
+    # Transfers
+    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
-        transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-        transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+    if order.amount == order.filled_amount:
+        transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
 
@@ -537,20 +539,23 @@ func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: in
     order.collected_target_amount = order.collected_target_amount + received_amount
     order.last_fill_timestamp = Global.LatestTimestamp
 
+    # Calculate the amount after feeing.
+    int fee_amount = calculate_fee_amount(received_amount, order.fee_rate)
+    assert(fee_amount)
+
+    order.collected_target_amount = order.collected_target_amount + (received_amount - fee_amount)
+
     # Logs
     bytes order_data
     _, order_data = box_get(order)
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
-    # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
-    # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
-    # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
-    if !order.remaining_recurrences:
-        int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
+    # Transfers
+    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
-        transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-        transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+    if !order.remaining_recurrences:
+        transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
 

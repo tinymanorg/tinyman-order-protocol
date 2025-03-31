@@ -27,7 +27,7 @@ const bytes MANAGER_KEY = "manager"
 const bytes IS_ENDORSED_KEY = "is_endorsed"
 
 # TODO
-const bytes ORDER_APP_HASH = 0x9a82f728545dc410700d4747a36205df4f28b5ae3dfe7f70433ca5d2b0f2ab3e
+const bytes ORDER_APP_HASH = 0x604746750c76bdf813590999913fc9a88f3aa0cf2d07f4a12673206434762b1e
 
 router:
     create_application
