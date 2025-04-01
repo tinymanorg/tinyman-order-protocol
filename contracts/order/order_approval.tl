@@ -536,7 +536,6 @@ func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: in
     assert((received_amount >= order.min_target_amount) && (received_amount <= order.max_target_amount))
 
     order.remaining_recurrences = order.remaining_recurrences - 1
-    order.collected_target_amount = order.collected_target_amount + received_amount
     order.last_fill_timestamp = Global.LatestTimestamp
 
     # Calculate the amount after feeing.
