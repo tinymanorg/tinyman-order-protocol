@@ -360,13 +360,11 @@ func collect(order_id: int, order_type: bytes[1]):
 
     int target_asset_id
     int collected_target_amount
-    int fee_rate
 
     if order_type == "o":
         box<Order> order = OpenBox(Concat("o", itob(order_id)))
         target_asset_id = order.target_asset_id
         collected_target_amount = order.collected_target_amount
-        fee_rate = order.fee_rate
 
         order.collected_target_amount = 0
 
@@ -378,7 +376,6 @@ func collect(order_id: int, order_type: bytes[1]):
         box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id)))
         target_asset_id = recurring_order.target_asset_id
         collected_target_amount = recurring_order.collected_target_amount
-        fee_rate = recurring_order.fee_rate
 
         recurring_order.collected_target_amount = 0
 
@@ -391,11 +388,7 @@ func collect(order_id: int, order_type: bytes[1]):
 
     assert(collected_target_amount)
 
-    int fee_amount = calculate_fee_amount(collected_target_amount, fee_rate)
-    assert(fee_amount)
-
-    transfer(target_asset_id, (collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-    transfer(target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+    transfer(target_asset_id, collected_target_amount, Global.CurrentApplicationAddress, user_address)
 
     # Logs
     log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
