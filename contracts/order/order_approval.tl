@@ -412,7 +412,7 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_t
     assert(amount > 0)
     assert(asset_id != target_asset_id)
     assert(target_recurrence > 0)
-    assert(interval > MINUTE)
+    assert(interval >= MINUTE)
     assert(!(interval % MINUTE))
 
     if !max_target_amount:
