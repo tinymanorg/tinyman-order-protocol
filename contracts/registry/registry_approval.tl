@@ -44,6 +44,8 @@ router:
     deendorse
     user_opt_in
     create_entry
+    verify_update
+    approve_version
 end
 
 
@@ -240,6 +242,45 @@ func create_entry():
 
     # Logs
     log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
+
+    return
+end
+
+
+# Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program.
+# Permission: Anyone
+@public()
+func verify_update(version: int):
+
+    int app_update_index = Txn.GroupIndex - 1
+    assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
+    assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
+
+    int exists
+    bytes expected_approval_hash
+    exists, expected_approval_hash = box_get(concat("v", itob(version)))
+    assert(exists)
+
+    # 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
+    int last_page = Gtxn[app_update_index].NumApprovalProgramPages
+    bytes chunk_hashes = ""
+    for i in 0:last_page:
+        chunk_hashes = concat(chunk_hashes, sha256(Gtxn[app_update_index].ApprovalProgramPages[i]))
+    end
+    bytes approval_hash = sha256(chunk_hashes)
+    assert(approval_hash == expected_approval_hash)
+
+    return
+end
+
+
+# Permission: Manager
+@public()
+func approve_version(version: int, approval_hash: bytes[32]):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    # approval_hash must be computed using the same algorithm as used in verify_update
+    box_put(concat("v", itob(version)), approval_hash)
 
     return
 end

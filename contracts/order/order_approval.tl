@@ -54,6 +54,8 @@ const bytes MANAGER_KEY = "manager"
 
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 
+const bytes VERSION_KEY = "version"
+
 # Global State External
 
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
@@ -72,9 +74,16 @@ const int MINUTE = 60
 const int INTERVAL_TOLERANCE = 30
 
 
+# Versioning
+
+# Update this value by one with each new version
+const int VERSION = 1
+
+
 router:
     create_application
     update_application
+    post_update
     init
     propose_manager
     accept_manager
@@ -103,16 +112,46 @@ func create_application(registry_app_id: int, vault_app_id: int, manager_address
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
 
+    app_global_put(VERSION_KEY, VERSION)
+
     # create_application(user_address,registry_app_id,vault_app_id,manager_address)
     log(ARC28Event("create_application(address,uint64,uint64,address)", Txn.Sender, itob(registry_app_id), itob(vault_app_id), manager_address))
     return
 end
 
 
-# TODO: Remove function for mainnet
+# Permission: user
 @public(OnCompletion=UpdateApplication)
-func update_application():
-    assert(Txn.Sender == app_global_get("manager"))
+func update_application(version: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    # Gtxn +1 must be a call to verify_update on the registry app
+    assert(Gtxn[+1].ApplicationID == app_global_get(REGISTRY_APP_ID_KEY))
+    assert(Gtxn[+1].ApplicationArgs[0] == "verify_update")
+    assert(Gtxn[+1].ApplicationArgs[1] == itob(version))
+
+    # Gtxn +2 must be a call to post_update on this app
+    assert(Gtxn[+2].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[+2].ApplicationArgs[0] == "post_update")
+    return
+end
+
+
+# Permission: user
+@public()
+func post_update():
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    # This will fail the update if the app is already at the same version
+    assert(app_global_get(VERSION_KEY) != VERSION)
+
+    # any version specific 'migrations' can be done here in future versions
+
+    # Always update the version number in global state
+    app_global_put(VERSION_KEY, VERSION)
+    log(ARC28Event("post_update(uint64)", itob(VERSION)))
     return
 end
 

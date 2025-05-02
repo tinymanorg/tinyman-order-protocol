@@ -103,6 +103,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.create_app(
             app_id=app_id,
             approval_program=order_approval_program,
+            extra_pages=3,
             creator=app_creator_address,
             local_ints=order_app_local_schema.num_uints,
             local_bytes=order_app_local_schema.num_byte_slices,
@@ -116,6 +117,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
             REGISTRY_APP_ID_KEY: self.registry_app_id,
             REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
             VAULT_APP_ID_KEY: self.vault_app_id,
+            VERSION_KEY: 1,
         }
 
         # Register the app.
