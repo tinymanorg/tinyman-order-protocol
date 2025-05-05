@@ -10,7 +10,7 @@ from tinyman.utils import TransactionGroup, int_to_bytes
 
 from sdk.base_client import BaseClient
 from sdk.constants import *
-from sdk.structs import Order, Entry
+from sdk.structs import TriggerOrder, Entry
 from sdk.utils import int_array
 
 # TODO: Later change these dependencies with the hardcoded ones.
@@ -112,7 +112,7 @@ class OrderingClient(BaseClient):
     def get_recurring_order_box_name(self, id: int):
         return b"r" + int_to_bytes(id)
 
-    def put_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, duration: int=0, order_id: int=None):
+    def put_trigger_order(self, asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: bool, duration: int=0, order_id: int=None):
         sp = self.get_suggested_params()
 
         if order_id is None:
@@ -121,7 +121,7 @@ class OrderingClient(BaseClient):
         order_box_name = self.get_order_box_name(order_id)
         new_boxes = {}
         if not self.box_exists(order_box_name, self.app_id):
-            new_boxes[order_box_name] = Order
+            new_boxes[order_box_name] = TriggerOrder
 
         assets_to_optin = [asset_id, target_asset_id]
         assets_to_optin = [aid for aid in assets_to_optin if not self.is_opted_in(self.application_address, aid)]
@@ -154,7 +154,7 @@ class OrderingClient(BaseClient):
                 sp=sp,
                 index=self.app_id,
                 app_args=[
-                    "put_order",
+                    "put_trigger_order",
                     int_to_bytes(asset_id),
                     int_to_bytes(amount),
                     int_to_bytes(target_asset_id),
@@ -173,11 +173,11 @@ class OrderingClient(BaseClient):
 
         return self._submit(transactions, additional_fees=1 + len(assets_to_optin))
 
-    def cancel_order(self, order_id: int):
+    def cancel_trigger_order(self, order_id: int):
         sp = self.get_suggested_params()
 
         order_box_name = self.get_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order")
+        order = self.get_box(order_box_name, "TriggerOrder")
 
         transactions = [
             transaction.ApplicationCallTxn(
@@ -186,7 +186,7 @@ class OrderingClient(BaseClient):
                 sp=sp,
                 index=self.app_id,
                 app_args=[
-                    "cancel_order",
+                    "cancel_trigger_order",
                     int_to_bytes(order_id)
                 ],
                 boxes=[
@@ -199,7 +199,7 @@ class OrderingClient(BaseClient):
 
         return self._submit(transactions, additional_fees=1)
 
-    def prepare_start_execute_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+    def prepare_start_execute_trigger_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
         """
         It is assumed that the caller of this method is a filler.
 
@@ -210,7 +210,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -218,7 +218,7 @@ class OrderingClient(BaseClient):
                 sp=sp,
                 index=order_app_id,
                 app_args=[
-                    "start_execute_order",
+                    "start_execute_trigger_order",
                     int_to_bytes(order_id),
                     int_to_bytes(fill_amount),
                     int_to_bytes(index_diff)
@@ -232,7 +232,7 @@ class OrderingClient(BaseClient):
 
         return txn
 
-    def prepare_end_execute_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
+    def prepare_end_execute_trigger_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
         """
         It is assumed that the caller of this method is a filler.
 
@@ -243,7 +243,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -251,7 +251,7 @@ class OrderingClient(BaseClient):
                 sp=sp,
                 index=order_app_id,
                 app_args=[
-                    "end_execute_order",
+                    "end_execute_trigger_order",
                     int_to_bytes(order_id),
                     int_to_bytes(fill_amount),
                     int_to_bytes(index_diff)
@@ -276,7 +276,7 @@ class OrderingClient(BaseClient):
         else:
             raise NotImplementedError()
 
-        order = self.get_box(order_box_name, "Order")
+        order = self.get_box(order_box_name, "TriggerOrder")
 
         transactions = [
             transaction.ApplicationCallTxn(
@@ -308,7 +308,7 @@ class OrderingClient(BaseClient):
         order_box_name = self.get_recurring_order_box_name(order_id)
         new_boxes = {}
         if not self.box_exists(order_box_name, self.app_id):
-            new_boxes[order_box_name] = Order
+            new_boxes[order_box_name] = TriggerOrder
 
         assets_to_optin = [asset_id, target_asset_id]
         assets_to_optin = [aid for aid in assets_to_optin if not self.is_opted_in(self.application_address, aid)]
@@ -366,7 +366,7 @@ class OrderingClient(BaseClient):
         sp = self.get_suggested_params()
 
         order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order")
+        order = self.get_box(order_box_name, "TriggerOrder")
 
         transactions = [
             transaction.ApplicationCallTxn(
@@ -399,7 +399,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,
@@ -432,7 +432,7 @@ class OrderingClient(BaseClient):
         """
 
         order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "Order", app_id=order_app_id)
+        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
 
         txn = transaction.ApplicationCallTxn(
                 sender=self.user_address,

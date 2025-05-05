@@ -11,7 +11,7 @@ from tinyman.governance.vault.constants import MAX_LOCK_TIME
 
 from sdk.constants import *
 from sdk.client import OrderingClient, RegistryClient
-from sdk.structs import Entry, Order
+from sdk.structs import Entry, TriggerOrder
 
 from tests.constants import *
 from tests.utils import JigAlgod

@@ -51,17 +51,17 @@ pushbytes "init"
 pushbytes "propose_manager"
 pushbytes "accept_manager"
 pushbytes "asset_opt_in"
-pushbytes "put_order"
-pushbytes "cancel_order"
-pushbytes "start_execute_order"
-pushbytes "end_execute_order"
+pushbytes "put_trigger_order"
+pushbytes "cancel_trigger_order"
+pushbytes "start_execute_trigger_order"
+pushbytes "end_execute_trigger_order"
 pushbytes "put_recurring_order"
 pushbytes "cancel_recurring_order"
 pushbytes "start_execute_recurring_order"
 pushbytes "end_execute_recurring_order"
 pushbytes "collect"
 txna ApplicationArgs 0
-match route_create_application route_update_application route_init route_propose_manager route_accept_manager route_asset_opt_in route_put_order route_cancel_order route_start_execute_order route_end_execute_order route_put_recurring_order route_cancel_recurring_order route_start_execute_recurring_order route_end_execute_recurring_order route_collect
+match route_create_application route_update_application route_init route_propose_manager route_accept_manager route_asset_opt_in route_put_trigger_order route_cancel_trigger_order route_start_execute_trigger_order route_end_execute_trigger_order route_put_recurring_order route_cancel_recurring_order route_start_execute_recurring_order route_end_execute_recurring_order route_collect
 err                                                         // unexpected value
 route_create_application:
     txn ApplicationID; pushint 0; ==; assert                // ApplicationID == 0
@@ -92,7 +92,7 @@ route_asset_opt_in:
     txna ApplicationArgs 1; dup; len; pushint 64; ==; assert// Bytes Size Assertion: 64 bytes
     callsub __func__asset_opt_in
     pushint 1; return
-route_put_order:
+route_put_trigger_order:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
     txna ApplicationArgs 1; btoi 
     txna ApplicationArgs 2; btoi 
@@ -100,26 +100,26 @@ route_put_order:
     txna ApplicationArgs 4; btoi 
     txna ApplicationArgs 5; btoi 
     txna ApplicationArgs 6; btoi 
-    callsub __func__put_order
+    callsub __func__put_trigger_order
     pushint 1; return
-route_cancel_order:
+route_cancel_trigger_order:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
     txna ApplicationArgs 1; btoi 
-    callsub __func__cancel_order
+    callsub __func__cancel_trigger_order
     pushint 1; return
-route_start_execute_order:
-    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
-    txna ApplicationArgs 1; btoi 
-    txna ApplicationArgs 2; btoi 
-    txna ApplicationArgs 3; btoi 
-    callsub __func__start_execute_order
-    pushint 1; return
-route_end_execute_order:
+route_start_execute_trigger_order:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
     txna ApplicationArgs 1; btoi 
     txna ApplicationArgs 2; btoi 
     txna ApplicationArgs 3; btoi 
-    callsub __func__end_execute_order
+    callsub __func__start_execute_trigger_order
+    pushint 1; return
+route_end_execute_trigger_order:
+    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
+    txna ApplicationArgs 1; btoi 
+    txna ApplicationArgs 2; btoi 
+    txna ApplicationArgs 3; btoi 
+    callsub __func__end_execute_trigger_order
     pushint 1; return
 route_put_recurring_order:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
@@ -342,8 +342,8 @@ __func__asset_opt_in:
 // Description: Create an order with the monotonically incremented ORDER_COUNT as id.
 // Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 // Permission: App owner (User)
-// tl:174: func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
-__func__put_order:
+// tl:174: func put_trigger_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
+__func__put_trigger_order:
     store 10                                                // duration [int]
     store 11                                                // is_partial_allowed [int]
     store 12                                                // target_amount [int]
@@ -364,7 +364,7 @@ __func__put_order:
     pushbytes TOTAL_ORDER_COUNT_KEY                         // "order_count"
     app_global_get
     store 17                                                // total_order_count
-    // tl:179: box<Order> order = CreateBox(Concat("o", itob(total_order_count))) [slot 18]
+    // tl:179: box<TriggerOrder> order = CreateBox(Concat("o", itob(total_order_count))) [slot 18]
     pushbytes "o"
     load 17                                                 // total_order_count
     itob
@@ -532,8 +532,8 @@ __func__put_order:
     box_get
     pop                                                     // discarding value for _
     store 22                                                // order_data
-    // tl:219: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
-    pushbytes 0xc953e07a                                    // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+    // tl:219: log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    pushbytes 0x137a03c3                                    // SHA512_256("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
     load 16                                                 // user_address
     load 17                                                 // total_order_count
     itob
@@ -542,8 +542,8 @@ __func__put_order:
     concat
     concat
     log
-    // tl:220: log(ARC28Event("put_order(uint64)", itob(total_order_count)))
-    pushbytes 0x1a736da3                                    // SHA512_256("put_order(uint64)")[:4]
+    // tl:220: log(ARC28Event("put_trigger_order(uint64)", itob(total_order_count)))
+    pushbytes 0xa08f3163                                    // SHA512_256("put_trigger_order(uint64)")[:4]
     load 17                                                 // total_order_count
     itob
     concat
@@ -556,8 +556,8 @@ __func__put_order:
 // Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
 // Prerequisites: If partial filling is utilized, collect method must be called before.
 // Permission: App owner (User)
-// tl:230: func cancel_order(order_id: int):
-__func__cancel_order:
+// tl:230: func cancel_trigger_order(order_id: int):
+__func__cancel_trigger_order:
     store 23                                                // order_id [int]
     // tl:231: bytes user_address = app_global_get(USER_ADDRESS_KEY) [slot 24]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
@@ -569,12 +569,12 @@ __func__cancel_order:
     ==
     assert
     
-    // tl:234: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 25]
+    // tl:234: box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id))) [slot 25]
     pushbytes "o"
     load 23                                                 // order_id
     itob
     concat
-    dup; box_len; assert; pushint 80; ==; assert            // len(box) == Order.size
+    dup; box_len; assert; pushint 80; ==; assert            // len(box) == TriggerOrder.size
     store 25                                                // box:order
     
     // It is assumed that the order is deleted once it is executed.
@@ -613,8 +613,8 @@ __func__cancel_order:
     box_get
     pop                                                     // discarding value for _
     store 27                                                // order_data
-    // tl:251: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    pushbytes 0xc953e07a                                    // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+    // tl:251: log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    pushbytes 0x137a03c3                                    // SHA512_256("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
     load 24                                                 // user_address
     load 23                                                 // order_id
     itob
@@ -623,8 +623,8 @@ __func__cancel_order:
     concat
     concat
     log
-    // tl:252: log(ARC28Event("cancel_order(uint64)", itob(order_id)))
-    pushbytes 0xc69098a6                                    // SHA512_256("cancel_order(uint64)")[:4]
+    // tl:252: log(ARC28Event("cancel_trigger_order(uint64)", itob(order_id)))
+    pushbytes 0xd9a5bf70                                    // SHA512_256("cancel_trigger_order(uint64)")[:4]
     load 23                                                 // order_id
     itob
     concat
@@ -703,19 +703,19 @@ __func__check_execute_order_txn:
 
 
 // Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
-// An executor must call `end_execute_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
+// An executor must call `end_execute_trigger_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 // Permission: Everyone
-// tl:278: func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
-__func__start_execute_order:
+// tl:278: func start_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
+__func__start_execute_trigger_order:
     store 33                                                // index_diff [int]
     store 34                                                // fill_amount [int]
     store 35                                                // order_id [int]
-    // tl:279: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 36]
+    // tl:279: box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id))) [slot 36]
     pushbytes "o"
     load 35                                                 // order_id
     itob
     concat
-    dup; box_len; assert; pushint 80; ==; assert            // len(box) == Order.size
+    dup; box_len; assert; pushint 80; ==; assert            // len(box) == TriggerOrder.size
     store 36                                                // box:order
     
     // Assertions
@@ -764,9 +764,9 @@ __func__start_execute_order:
     load 33                                                 // index_diff
     +
     store 38                                                // end_execute_order_txn_index
-    // tl:296: check_execute_order_txn(end_execute_order_txn_index, "end_execute_order", order_id, fill_amount, index_diff)
+    // tl:296: check_execute_order_txn(end_execute_order_txn_index, "end_execute_trigger_order", order_id, fill_amount, index_diff)
     load 38                                                 // end_execute_order_txn_index
-    pushbytes "end_execute_order"
+    pushbytes "end_execute_trigger_order"
     load 35                                                 // order_id
     load 34                                                 // fill_amount
     load 33                                                 // index_diff
@@ -781,8 +781,8 @@ __func__start_execute_order:
     callsub __func__transfer
     
     // Logs
-    // tl:302: log(ARC28Event("start_execute_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
-    pushbytes 0x1740bc29                                    // SHA512_256("start_execute_order(address,uint64,address)")[:4]
+    // tl:302: log(ARC28Event("start_execute_trigger_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
+    pushbytes 0x6d78419b                                    // SHA512_256("start_execute_trigger_order(address,uint64,address)")[:4]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
     load 35                                                 // order_id
@@ -797,11 +797,11 @@ __func__start_execute_order:
     retsub
 
 
-// Description: Method checks the validity of the execution between `start_execute_order` and `end_execute_order`.
+// Description: Method checks the validity of the execution between `start_execute_trigger_order` and `end_execute_trigger_order`.
 // An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
 // Permission: Everyone
-// tl:312: func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
-__func__end_execute_order:
+// tl:312: func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
+__func__end_execute_trigger_order:
     store 39                                                // index_diff [int]
     store 40                                                // fill_amount [int]
     store 41                                                // order_id [int]
@@ -809,12 +809,12 @@ __func__end_execute_order:
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
     store 42                                                // user_address
-    // tl:314: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 43]
+    // tl:314: box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id))) [slot 43]
     pushbytes "o"
     load 41                                                 // order_id
     itob
     concat
-    dup; box_len; assert; pushint 80; ==; assert            // len(box) == Order.size
+    dup; box_len; assert; pushint 80; ==; assert            // len(box) == TriggerOrder.size
     store 43                                                // box:order
     
     // tl:316: int start_execute_order_txn_index = Txn.GroupIndex - index_diff [slot 44]
@@ -822,9 +822,9 @@ __func__end_execute_order:
     load 39                                                 // index_diff
     -
     store 44                                                // start_execute_order_txn_index
-    // tl:317: check_execute_order_txn(start_execute_order_txn_index, "start_execute_order", order_id, fill_amount, index_diff)
+    // tl:317: check_execute_order_txn(start_execute_order_txn_index, "start_execute_trigger_order", order_id, fill_amount, index_diff)
     load 44                                                 // start_execute_order_txn_index
-    pushbytes "start_execute_order"
+    pushbytes "start_execute_trigger_order"
     load 41                                                 // order_id
     load 40                                                 // fill_amount
     load 39                                                 // index_diff
@@ -903,8 +903,8 @@ __func__end_execute_order:
     box_get
     pop                                                     // discarding value for _
     store 48                                                // order_data
-    // tl:341: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    pushbytes 0xc953e07a                                    // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+    // tl:341: log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    pushbytes 0x137a03c3                                    // SHA512_256("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
     load 42                                                 // user_address
     load 41                                                 // order_id
     itob
@@ -913,8 +913,8 @@ __func__end_execute_order:
     concat
     concat
     log
-    // tl:342: log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
-    pushbytes 0x6cfd21b6                                    // SHA512_256("end_execute_order(address,uint64,address,uint64,uint64)")[:4]
+    // tl:342: log(ARC28Event("end_execute_trigger_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    pushbytes 0xae0a7e52                                    // SHA512_256("end_execute_trigger_order(address,uint64,address,uint64,uint64)")[:4]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
     load 41                                                 // order_id
@@ -985,12 +985,12 @@ __func__collect:
     ==
     bz l7_elif_0
     // then:
-        // tl:365: box<Order> order = OpenBox(Concat("o", itob(order_id))) [slot 54]
+        // tl:365: box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id))) [slot 54]
         pushbytes "o"
         load 50                                             // order_id
         itob
         concat
-        dup; box_len; assert; pushint 80; ==; assert        // len(box) == Order.size
+        dup; box_len; assert; pushint 80; ==; assert        // len(box) == TriggerOrder.size
         store 54                                            // box:order
         // tl:366: target_asset_id = order.target_asset_id
         load 54; pushint 16; pushint 8; box_extract; btoi// order.target_asset_id
@@ -1014,8 +1014,8 @@ __func__collect:
         box_get
         pop                                                 // discarding value for _
         store 55                                            // order_data
-        // tl:373: log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-        pushbytes 0xc953e07a                                // SHA512_256("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+        // tl:373: log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+        pushbytes 0x137a03c3                                // SHA512_256("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
         load 51                                             // user_address
         load 50                                             // order_id
         itob

@@ -7,7 +7,7 @@
 
 
 # Name: o<id>
-struct Order:
+struct TriggerOrder:
     asset_id: int
     amount: int
     target_asset_id: int
@@ -79,10 +79,10 @@ router:
     propose_manager
     accept_manager
     asset_opt_in
-    put_order
-    cancel_order
-    start_execute_order
-    end_execute_order
+    put_trigger_order
+    cancel_trigger_order
+    start_execute_trigger_order
+    end_execute_trigger_order
     put_recurring_order
     cancel_recurring_order
     start_execute_recurring_order
@@ -171,12 +171,12 @@ end
 # Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 # Permission: App owner (User)
 @public()
-func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
+func put_trigger_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
     int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
-    box<Order> order = CreateBox(Concat("o", itob(total_order_count)))
+    box<TriggerOrder> order = CreateBox(Concat("o", itob(total_order_count)))
 
     # Assertions
     assert(amount > 0)
@@ -216,8 +216,8 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
-    log(ARC28Event("put_order(uint64)", itob(total_order_count)))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("put_trigger_order(uint64)", itob(total_order_count)))
 
     return
 end
@@ -227,11 +227,11 @@ end
 # Prerequisites: If partial filling is utilized, collect method must be called before.
 # Permission: App owner (User)
 @public()
-func cancel_order(order_id: int):
+func cancel_trigger_order(order_id: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     # It is assumed that the order is deleted once it is executed.
     # Send remaining amount back to user.
@@ -248,8 +248,8 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("cancel_order(uint64)", itob(order_id)))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_trigger_order(uint64)", itob(order_id)))
 
     # Delete the box.
     _ = box_del(order)
@@ -272,11 +272,11 @@ end
 
 
 # Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
-# An executor must call `end_execute_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
+# An executor must call `end_execute_trigger_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 # Permission: Everyone
 @public()
-func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+func start_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     # Assertions
     assert(index_diff >= 2)
@@ -293,28 +293,28 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Global.LatestTimestamp <= order.expiration_timestamp)
 
     int end_execute_order_txn_index = Txn.GroupIndex + index_diff
-    check_execute_order_txn(end_execute_order_txn_index, "end_execute_order", order_id, fill_amount, index_diff)
+    check_execute_order_txn(end_execute_order_txn_index, "end_execute_trigger_order", order_id, fill_amount, index_diff)
 
     # Transfer `fill_amount` to executor.
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
 
     # Logs
-    log(ARC28Event("start_execute_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
+    log(ARC28Event("start_execute_trigger_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
 
     return
 end
 
 
-# Description: Method checks the validity of the execution between `start_execute_order` and `end_execute_order`.
+# Description: Method checks the validity of the execution between `start_execute_trigger_order` and `end_execute_trigger_order`.
 # An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
 # Permission: Everyone
 @public()
-func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
+func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
-    check_execute_order_txn(start_execute_order_txn_index, "start_execute_order", order_id, fill_amount, index_diff)
+    check_execute_order_txn(start_execute_order_txn_index, "start_execute_trigger_order", order_id, fill_amount, index_diff)
 
     # Assert that user received the target amount or more.
     # TODO: Review the calculations.
@@ -338,8 +338,8 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("end_execute_trigger_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
     # Transfers
     transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
@@ -362,7 +362,7 @@ func collect(order_id: int, order_type: bytes[1]):
     int collected_target_amount
 
     if order_type == "o":
-        box<Order> order = OpenBox(Concat("o", itob(order_id)))
+        box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
         target_asset_id = order.target_asset_id
         collected_target_amount = order.collected_target_amount
 
@@ -370,7 +370,7 @@ func collect(order_id: int, order_type: bytes[1]):
 
         bytes order_data
         _, order_data = box_get(order)
-        log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+        log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
 
     elif order_type == "r":
         box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id)))

@@ -13,7 +13,7 @@ from sdk.constants import *
 from sdk.client import OrderingClient
 from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
-from sdk.structs import Order
+from sdk.structs import TriggerOrder
 
 from tests.constants import order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
 from tests.core import OrderProtocolBaseTestCase
@@ -88,7 +88,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -121,7 +121,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
 
         self.assertEqual(put_order_event['order_id'], 0)
 
-        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "Order")
+        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "TriggerOrder")
         self.assertEqual(order.asset_id, self.talgo_asset_id)
         self.assertEqual(order.amount, 100_000)
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
@@ -149,7 +149,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -182,7 +182,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
 
         self.assertEqual(put_order_event['order_id'], 0)
 
-        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "Order")
+        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "TriggerOrder")
         self.assertEqual(order.asset_id, self.talgo_asset_id)
         self.assertEqual(order.amount, 100_000)
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
@@ -238,7 +238,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -249,7 +249,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
 
         # Cancel Order
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.cancel_order(0)
+        self.ordering_client.cancel_trigger_order(0)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -300,7 +300,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -312,13 +312,13 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         # Mock partial filling.
         filled_amount = 10_000
         order_box_name = self.ordering_client.get_order_box_name(0)
-        order = Order(bytearray(self.ordering_client.get_box(order_box_name, "Order")._data))
+        order = TriggerOrder(bytearray(self.ordering_client.get_box(order_box_name, "TriggerOrder")._data))
         order.filled_amount = filled_amount
         self.ledger.set_box(self.ordering_client.app_id, key=order_box_name, value=order._data)
 
         # Cancel Order
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.cancel_order(0)
+        self.ordering_client.cancel_trigger_order(0)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -385,7 +385,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -407,7 +407,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
 
         sp = filler_client.get_suggested_params()
         transactions = [
-            filler_client.prepare_start_execute_order_transaction(
+            filler_client.prepare_start_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -422,7 +422,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
                 amt=bought_amount,
                 index=self.tiny_asset_id
             ),
-            filler_client.prepare_end_execute_order_transaction(
+            filler_client.prepare_end_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -513,7 +513,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -535,7 +535,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         collected_target_amount = bought_amount - fee_amount
         sp = filler_client.get_suggested_params()
         transactions = [
-            filler_client.prepare_start_execute_order_transaction(
+            filler_client.prepare_start_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -550,7 +550,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
                 amt=bought_amount,
                 index=self.tiny_asset_id
             ),
-            filler_client.prepare_end_execute_order_transaction(
+            filler_client.prepare_end_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -601,7 +601,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(end_execute_order_event['fill_amount'], fill_amount)
         self.assertEqual(end_execute_order_event['bought_amount'], bought_amount)
 
-        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "Order")
+        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "TriggerOrder")
         self.assertEqual(order.asset_id, self.talgo_asset_id)
         self.assertEqual(order.amount, 100_000)
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
@@ -647,7 +647,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -658,7 +658,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
 
         # Modify the order as if it is partially filled before.
         order_box_name = self.ordering_client.get_order_box_name(0)
-        order = Order(bytearray(self.ordering_client.get_box(order_box_name, "Order")._data))
+        order = TriggerOrder(bytearray(self.ordering_client.get_box(order_box_name, "TriggerOrder")._data))
         order.filled_amount = 50_000
         order.collected_target_amount = (15_000 // 2)
         self.ledger.set_box(self.ordering_client.app_id, key=order_box_name, value=order._data)
@@ -680,7 +680,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         collected_target_amount = (15_000 // 2) + (bought_amount - fee_amount)
         sp = filler_client.get_suggested_params()
         transactions = [
-            filler_client.prepare_start_execute_order_transaction(
+            filler_client.prepare_start_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -695,7 +695,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
                 amt=bought_amount,
                 index=self.tiny_asset_id
             ),
-            filler_client.prepare_end_execute_order_transaction(
+            filler_client.prepare_end_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -1413,7 +1413,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
 
         self.ledger.next_timestamp = now + DAY
-        self.ordering_client.put_order(
+        self.ordering_client.put_trigger_order(
             asset_id=self.talgo_asset_id,
             amount=100_000,
             target_asset_id=self.tiny_asset_id,
@@ -1435,7 +1435,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         collected_target_amount = bought_amount - fee_amount
         sp = filler_client.get_suggested_params()
         transactions = [
-            filler_client.prepare_start_execute_order_transaction(
+            filler_client.prepare_start_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -1450,7 +1450,7 @@ class CollectTests(OrderProtocolBaseTestCase):
                 amt=bought_amount,
                 index=self.tiny_asset_id
             ),
-            filler_client.prepare_end_execute_order_transaction(
+            filler_client.prepare_end_execute_trigger_order_transaction(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
                 account_address=self.ordering_client.user_address,
@@ -1495,7 +1495,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.assertEqual(collect_event["order_id"], 0)
         self.assertEqual(collect_event["collected_target_amount"], collected_target_amount)
 
-        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "Order")
+        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "TriggerOrder")
         self.assertEqual(order.asset_id, self.talgo_asset_id)
         self.assertEqual(order.amount, 100_000)
         self.assertEqual(order.target_asset_id, self.tiny_asset_id)
