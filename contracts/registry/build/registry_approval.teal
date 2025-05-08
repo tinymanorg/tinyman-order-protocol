@@ -24,7 +24,7 @@
 #define IS_ENDORSED_KEY "is_endorsed"
 
 // TODO
-#define ORDER_APP_HASH 0x53306a90a3ef47f75247f4bc2ebe5b61f97af3aa0f331ce03e195f97bcf68f60
+#define ORDER_APP_HASH 0x093b77ca9fc5ae9437e473ef9e7b683c38ccabdeda8dfb2ee2a768c36dd6beb9
 
 // tl:32: router:
 pushbytes "create_application"
@@ -568,7 +568,7 @@ __func__create_entry:
     store 20                                                // approval_hash
     // tl:234: assert(approval_hash == ORDER_APP_HASH)
     load 20                                                 // approval_hash
-    pushbytes ORDER_APP_HASH                                // 0x53306a90a3ef47f75247f4bc2ebe5b61f97af3aa0f331ce03e195f97bcf68f60
+    pushbytes ORDER_APP_HASH                                // 0x093b77ca9fc5ae9437e473ef9e7b683c38ccabdeda8dfb2ee2a768c36dd6beb9
     ==
     assert
     
