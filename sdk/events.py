@@ -58,23 +58,86 @@ deendorse_event = Event(
 )
 
 
+order_fields = [
+    abi.Argument(arg_type="uint64", name="asset_id"),
+    abi.Argument(arg_type="uint64", name="amount"),
+    abi.Argument(arg_type="uint64", name="target_asset_id"),
+    abi.Argument(arg_type="uint64", name="target_amount"),
+    abi.Argument(arg_type="uint64", name="filled_amount"),
+    abi.Argument(arg_type="uint64", name="collected_target_amount"),
+    abi.Argument(arg_type="uint64", name="is_partial_allowed"),
+    abi.Argument(arg_type="uint64", name="fee_rate"),
+    abi.Argument(arg_type="uint64", name="creation_timestamp"),
+    abi.Argument(arg_type="uint64", name="expiration_timestamp")
+]
+
+recurring_order_fields = [
+    abi.Argument(arg_type="uint64", name="asset_id"),
+    abi.Argument(arg_type="uint64", name="amount"),
+    abi.Argument(arg_type="uint64", name="target_asset_id"),
+    abi.Argument(arg_type="uint64", name="collected_target_amount"),
+    abi.Argument(arg_type="uint64", name="min_target_amount"),
+    abi.Argument(arg_type="uint64", name="max_target_amount"),
+    abi.Argument(arg_type="uint64", name="remaining_recurrences"),
+    abi.Argument(arg_type="uint64", name="interval"),
+    abi.Argument(arg_type="uint64", name="fee_rate"),
+    abi.Argument(arg_type="uint64", name="last_fill_timestamp"),
+    abi.Argument(arg_type="uint64", name="creation_timestamp")
+]
+
+
+registry_put_order_event = Event(
+    name="put_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ] + order_fields
+)
+
+
+registry_update_order_event = Event(
+    name="update_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ] + order_fields
+)
+
+
+registry_put_recurring_order_event = Event(
+    name="put_recurring_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ] + recurring_order_fields
+)
+
+
+registry_update_recurring_order_event = Event(
+    name="update_recurring_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ] + recurring_order_fields
+)
+
+
 # Order Events
 order_event = Event(
     name="order",
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
-        abi.Argument(arg_type="uint64", name="asset_id"),
-        abi.Argument(arg_type="uint64", name="amount"),
-        abi.Argument(arg_type="uint64", name="target_asset_id"),
-        abi.Argument(arg_type="uint64", name="target_amount"),
-        abi.Argument(arg_type="uint64", name="filled_amount"),
-        abi.Argument(arg_type="uint64", name="collected_target_amount"),
-        abi.Argument(arg_type="uint64", name="is_partial_allowed"),
-        abi.Argument(arg_type="uint64", name="fee_rate"),
-        abi.Argument(arg_type="uint64", name="creation_timestamp"),
-        abi.Argument(arg_type="uint64", name="expiration_timestamp")
-    ]
+    ] + order_fields
+)
+
+# Order Events
+order_event = Event(
+    name="order",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ] + order_fields
 )
 
 
@@ -131,18 +194,7 @@ recurring_order_event = Event(
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
-        abi.Argument(arg_type="uint64", name="asset_id"),
-        abi.Argument(arg_type="uint64", name="amount"),
-        abi.Argument(arg_type="uint64", name="target_asset_id"),
-        abi.Argument(arg_type="uint64", name="collected_target_amount"),
-        abi.Argument(arg_type="uint64", name="min_target_amount"),
-        abi.Argument(arg_type="uint64", name="max_target_amount"),
-        abi.Argument(arg_type="uint64", name="remaining_recurrences"),
-        abi.Argument(arg_type="uint64", name="interval"),
-        abi.Argument(arg_type="uint64", name="fee_rate"),
-        abi.Argument(arg_type="uint64", name="last_fill_timestamp"),
-        abi.Argument(arg_type="uint64", name="creation_timestamp")
-    ]
+    ] + recurring_order_fields
 )
 
 
@@ -191,7 +243,11 @@ registry_events = [
     claim_fees_event,
     endorse_event,
     deendorse_event,
-    entry_event
+    entry_event,
+    registry_put_order_event,
+    registry_update_order_event,
+    registry_put_recurring_order_event,
+    registry_update_recurring_order_event,
 ]
 
 
