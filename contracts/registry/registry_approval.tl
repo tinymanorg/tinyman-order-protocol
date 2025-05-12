@@ -245,6 +245,31 @@ func create_entry():
 end
 
 
+@public()
+func emit_event(event_name: bytes, user_address: bytes, data: bytes):
+    box<Entry> entry = OpenBox(Concat("e", user_address))
+    int app_id = Global.CallerApplicationID
+    assert(app_id == entry.app_id)
+
+    bytes event
+    if event_name == "put_order":
+        event = ARC28Event("put_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "update_order":
+        event = ARC28Event("update_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "cancel_order":
+        event = ARC28Event("cancel_order(uint64,uint64)", itob(app_id), data)
+    elif event_name == "put_recurring_order":
+        event = ARC28Event("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "update_recurring_order":
+        event = ARC28Event("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "cancel_recurring_order":
+        event = ARC28Event("cancel_recurring_order(uint64,uint64)", itob(app_id), data)
+    end
+    log(event)
+    return
+end
+
+
 func opt_in_to_asset_if_needed(asset_id: int) int:
     int is_opted_in
 

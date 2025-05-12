@@ -216,6 +216,7 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("put_order", user_address, Concat(itob(total_order_count), order_data))
     log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_order(uint64)", itob(total_order_count)))
 
@@ -248,6 +249,7 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("cancel_order", user_address, itob(order_id))
     log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_order(uint64)", itob(order_id)))
 
@@ -338,6 +340,7 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("update_order", user_address, Concat(itob(order_id), order_data))
     log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
@@ -447,6 +450,7 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_t
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("put_recurring_order", user_address, Concat(itob(total_order_count), order_data))
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
     log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
 
@@ -475,6 +479,7 @@ func cancel_recurring_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("cancel_recurring_order", user_address, itob(order_id))
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
 
@@ -542,6 +547,7 @@ func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: in
     # Logs
     bytes order_data
     _, order_data = box_get(order)
+    registry_emit_event("update_recurring_order", user_address, Concat(itob(order_id), order_data))
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
@@ -690,3 +696,16 @@ func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
     return
 end
 
+
+func registry_emit_event(event_name: bytes, user_address: bytes, data: bytes):
+    inner_txn:
+        TypeEnum: Appl
+        Fee: 0
+        ApplicationID: app_global_get(REGISTRY_APP_ID_KEY)
+        ApplicationArgs[0]: "emit_event"
+        ApplicationArgs[1]: event_name
+        ApplicationArgs[2]: user_address
+        ApplicationArgs[3]: data
+    end
+    return
+end

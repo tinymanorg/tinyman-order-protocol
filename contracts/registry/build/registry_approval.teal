@@ -607,97 +607,215 @@ __func__create_entry:
     retsub
 
 
-// tl:248: func opt_in_to_asset_if_needed(asset_id: int) int:
-__func__opt_in_to_asset_if_needed:
-    store 22                                                // asset_id [int]
-    // tl:249: int is_opted_in [slot 23]
+// tl:249: func emit_event(event_name: bytes, user_address: bytes, data: bytes):
+__func__emit_event:
+    store 22                                                // data [bytes]
+    store 23                                                // user_address [bytes]
+    store 24                                                // event_name [bytes]
+    // tl:250: box<Entry> entry = OpenBox(Concat("e", user_address)) [slot 25]
+    pushbytes "e"
+    load 23                                                 // user_address
+    concat
+    dup; box_len; assert; pushint 8; ==; assert             // len(box) == Entry.size
+    store 25                                                // box:entry
+    // tl:251: int app_id = Global.CallerApplicationID [slot 26]
+    global CallerApplicationID
+    store 26                                                // app_id
+    // tl:252: assert(app_id == entry.app_id)
+    load 26                                                 // app_id
+    load 25; pushint 0; pushint 8; box_extract; btoi// entry.app_id
+    ==
+    assert
     
-    // tl:251: if asset_id:
-    load 22                                                 // asset_id
-    bz l2_end
+    // tl:254: bytes event [slot 27]
+    // tl:255: if event_name == "put_order":
+    load 24                                                 // event_name
+    pushbytes "put_order"
+    ==
+    bz l2_elif_0
     // then:
-        // tl:252: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:256: event = ARC28Event("put_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+        pushbytes 0x94134d08                                // SHA512_256("put_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+        load 26                                             // app_id
+        itob
+        load 22                                             // data
+        concat
+        concat
+        store 27                                            // event
+        b l2_end
+    l2_elif_0:
+    // tl:257: elif event_name == "update_order":
+        load 24                                             // event_name
+        pushbytes "update_order"
+        ==
+        bz l2_elif_1
+            // tl:258: event = ARC28Event("update_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            pushbytes 0xcda74195                            // SHA512_256("update_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+            load 26                                         // app_id
+            itob
+            load 22                                         // data
+            concat
+            concat
+            store 27                                        // event
+            b l2_end
+    l2_elif_1:
+    // tl:259: elif event_name == "cancel_order":
+        load 24                                             // event_name
+        pushbytes "cancel_order"
+        ==
+        bz l2_elif_2
+            // tl:260: event = ARC28Event("cancel_order(uint64,uint64)", itob(app_id), data)
+            pushbytes 0xa5860b73                            // SHA512_256("cancel_order(uint64,uint64)")[:4]
+            load 26                                         // app_id
+            itob
+            load 22                                         // data
+            concat
+            concat
+            store 27                                        // event
+            b l2_end
+    l2_elif_2:
+    // tl:261: elif event_name == "put_recurring_order":
+        load 24                                             // event_name
+        pushbytes "put_recurring_order"
+        ==
+        bz l2_elif_3
+            // tl:262: event = ARC28Event("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            pushbytes 0xc544bee9                            // SHA512_256("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+            load 26                                         // app_id
+            itob
+            load 22                                         // data
+            concat
+            concat
+            store 27                                        // event
+            b l2_end
+    l2_elif_3:
+    // tl:263: elif event_name == "update_recurring_order":
+        load 24                                             // event_name
+        pushbytes "update_recurring_order"
+        ==
+        bz l2_elif_4
+            // tl:264: event = ARC28Event("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            pushbytes 0x2cd4ef7c                            // SHA512_256("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
+            load 26                                         // app_id
+            itob
+            load 22                                         // data
+            concat
+            concat
+            store 27                                        // event
+            b l2_end
+    l2_elif_4:
+    // tl:265: elif event_name == "cancel_recurring_order":
+        load 24                                             // event_name
+        pushbytes "cancel_recurring_order"
+        ==
+        bz l2_end
+            // tl:266: event = ARC28Event("cancel_recurring_order(uint64,uint64)", itob(app_id), data)
+            pushbytes 0x8f787e17                            // SHA512_256("cancel_recurring_order(uint64,uint64)")[:4]
+            load 26                                         // app_id
+            itob
+            load 22                                         // data
+            concat
+            concat
+            store 27                                        // event
+    l2_end:
+    // tl:268: log(event)
+    load 27                                                 // event
+    log
+    // tl:269: return
+    retsub
+
+
+// tl:273: func opt_in_to_asset_if_needed(asset_id: int) int:
+__func__opt_in_to_asset_if_needed:
+    store 28                                                // asset_id [int]
+    // tl:274: int is_opted_in [slot 29]
+    
+    // tl:276: if asset_id:
+    load 28                                                 // asset_id
+    bz l3_end
+    // then:
+        // tl:277: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
-        load 22                                             // asset_id
+        load 28                                             // asset_id
         asset_holding_get AssetBalance
-        store 23                                            // is_opted_in
+        store 29                                            // is_opted_in
         pop                                                 // discarding value for _
         
-        // tl:254: if is_opted_in == 0:
-        load 23                                             // is_opted_in
+        // tl:279: if is_opted_in == 0:
+        load 29                                             // is_opted_in
         pushint 0
         ==
-        bz l3_end
+        bz l4_end
         // then:
-            // tl:255: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
-            load 22                                         // asset_id
+            // tl:280: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            load 28                                         // asset_id
             pushint 0
             global CurrentApplicationAddress
             global CurrentApplicationAddress
             callsub __func__transfer
-        l3_end:
-    l2_end:
-    // tl:258: return !is_opted_in
-    load 23                                                 // is_opted_in
+        l4_end:
+    l3_end:
+    // tl:283: return !is_opted_in
+    load 29                                                 // is_opted_in
     !
     retsub
 
 
-// tl:262: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+// tl:287: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
 __func__transfer:
-    store 24                                                // receiver [bytes]
-    store 25                                                // sender [bytes]
-    store 26                                                // amount [int]
-    store 27                                                // asset_id [int]
-    // tl:263: if !asset_id:
-    load 27                                                 // asset_id
+    store 30                                                // receiver [bytes]
+    store 31                                                // sender [bytes]
+    store 32                                                // amount [int]
+    store 33                                                // asset_id [int]
+    // tl:288: if !asset_id:
+    load 33                                                 // asset_id
     !
-    bz l4_else
+    bz l5_else
     // then:
-        // tl:264: inner_txn:
+        // tl:289: inner_txn:
         itxn_begin
-            // tl:265: TypeEnum: Pay
+            // tl:290: TypeEnum: Pay
             pushint 1                                       // Pay
             itxn_field TypeEnum
-            // tl:266: Sender: sender
-            load 25                                         // sender
+            // tl:291: Sender: sender
+            load 31                                         // sender
             itxn_field Sender
-            // tl:267: Receiver: receiver
-            load 24                                         // receiver
+            // tl:292: Receiver: receiver
+            load 30                                         // receiver
             itxn_field Receiver
-            // tl:268: Amount: amount
-            load 26                                         // amount
+            // tl:293: Amount: amount
+            load 32                                         // amount
             itxn_field Amount
-            // tl:269: Fee: 0
+            // tl:294: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
-        b l4_end
-    l4_else:
-    // tl:271: else:
-        // tl:272: inner_txn:
+        b l5_end
+    l5_else:
+    // tl:296: else:
+        // tl:297: inner_txn:
         itxn_begin
-            // tl:273: TypeEnum: Axfer
+            // tl:298: TypeEnum: Axfer
             pushint 4                                       // Axfer
             itxn_field TypeEnum
-            // tl:274: Sender: sender
-            load 25                                         // sender
+            // tl:299: Sender: sender
+            load 31                                         // sender
             itxn_field Sender
-            // tl:275: AssetReceiver: receiver
-            load 24                                         // receiver
+            // tl:300: AssetReceiver: receiver
+            load 30                                         // receiver
             itxn_field AssetReceiver
-            // tl:276: AssetAmount: amount
-            load 26                                         // amount
+            // tl:301: AssetAmount: amount
+            load 32                                         // amount
             itxn_field AssetAmount
-            // tl:277: XferAsset: asset_id
-            load 27                                         // asset_id
+            // tl:302: XferAsset: asset_id
+            load 33                                         // asset_id
             itxn_field XferAsset
-            // tl:278: Fee: 0
+            // tl:303: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
-    l4_end:
-    // tl:281: return
+    l5_end:
+    // tl:306: return
     retsub
