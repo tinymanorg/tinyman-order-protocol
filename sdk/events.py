@@ -104,6 +104,15 @@ registry_update_order_event = Event(
 )
 
 
+registry_cancel_order_event = Event(
+    name="cancel_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ]
+)
+
+
 registry_put_recurring_order_event = Event(
     name="put_recurring_order",
     args=[
@@ -119,6 +128,15 @@ registry_update_recurring_order_event = Event(
         abi.Argument(arg_type="uint64", name="order_app_id"),
         abi.Argument(arg_type="uint64", name="order_id"),
     ] + recurring_order_fields
+)
+
+
+registry_cancel_recurring_order_event = Event(
+    name="cancel_recurring_order",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="order_id"),
+    ]
 )
 
 
@@ -246,8 +264,10 @@ registry_events = [
     entry_event,
     registry_put_order_event,
     registry_update_order_event,
+    registry_cancel_order_event,
     registry_put_recurring_order_event,
     registry_update_recurring_order_event,
+    registry_cancel_recurring_order_event,
 ]
 
 

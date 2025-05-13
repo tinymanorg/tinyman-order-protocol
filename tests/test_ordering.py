@@ -274,6 +274,12 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
 
         self.assertEqual(cancel_order_event['order_id'], 0)
 
+        # registry events
+        events = decode_logs(cancel_order_txn[b'dt'][b'itx'][-1][b'dt'][b'lg'], registry_events)
+        cancel_order_event = events[0]
+        self.assertEqual(cancel_order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(cancel_order_event['order_id'], 0)
+
         # Inner Transaction Checks
         inner_txns = cancel_order_txn[b'dt'][b'itx']
 
@@ -881,6 +887,23 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
 
         self.assertEqual(put_recurring_order_event['order_id'], 0)
 
+        # registry events
+        events = decode_logs(put_recurring_order_txn[b'dt'][b'itx'][-1][b'dt'][b'lg'], registry_events)
+        put_recurring_order_event = events[0]
+        self.assertEqual(put_recurring_order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(put_recurring_order_event['order_id'], 0)
+        self.assertEqual(put_recurring_order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(put_recurring_order_event['amount'], 100_000)
+        self.assertEqual(put_recurring_order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(put_recurring_order_event['collected_target_amount'], 0)
+        self.assertEqual(put_recurring_order_event['remaining_recurrences'], target_recurrence)
+        self.assertEqual(put_recurring_order_event['min_target_amount'], 0)
+        self.assertEqual(put_recurring_order_event['max_target_amount'], MAX_UINT64)
+        self.assertEqual(put_recurring_order_event['interval'], interval)
+        self.assertEqual(put_recurring_order_event['fee_rate'], 30)
+        self.assertEqual(put_recurring_order_event['last_fill_timestamp'], 0)
+        self.assertEqual(put_recurring_order_event['creation_timestamp'], now + DAY)
+
         recurring_order = self.ordering_client.get_box(self.ordering_client.get_recurring_order_box_name(0), "RecurringOrder")
         self.assertEqual(recurring_order.asset_id, self.talgo_asset_id)
         self.assertEqual(recurring_order.amount, 100_000)
@@ -958,6 +981,12 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order_event['last_fill_timestamp'], 0)
         self.assertEqual(recurring_order_event['creation_timestamp'], now + DAY)
 
+        self.assertEqual(cancel_recurring_order_event['order_id'], 0)
+
+        # registry events
+        events = decode_logs(cancel_recurring_order_txn[b'dt'][b'itx'][-1][b'dt'][b'lg'], registry_events)
+        cancel_recurring_order_event = events[0]
+        self.assertEqual(cancel_recurring_order_event['order_app_id'], self.ordering_client.app_id)
         self.assertEqual(cancel_recurring_order_event['order_id'], 0)
 
         # Inner Transaction Checks
