@@ -497,6 +497,22 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[2][b'txn'][b'arcv'], decode_address(self.user_address))
         self.assertEqual(inner_txns[2][b'txn'][b'aamt'], collected_target_amount)
 
+        events = decode_logs(inner_txns[0][b'dt'][b'lg'], registry_events)
+        self.assertEqual(len(events), 1)
+        order_event = events[0]
+        self.assertEqual(order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(order_event['order_id'], 0)
+        self.assertEqual(order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(order_event['amount'], 100_000)
+        self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(order_event['target_amount'], 15_000)
+        self.assertEqual(order_event['filled_amount'], 100_000)
+        self.assertEqual(order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(order_event['is_partial_allowed'], 0)
+        self.assertEqual(order_event['fee_rate'], 30)
+        self.assertEqual(order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
+
     def test_execute_order_partial_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
@@ -630,6 +646,22 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[1][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
         self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
         self.assertEqual(inner_txns[1][b'txn'][b'aamt'], fee_amount)
+
+        events = decode_logs(inner_txns[0][b'dt'][b'lg'], registry_events)
+        self.assertEqual(len(events), 1)
+        order_event = events[0]
+        self.assertEqual(order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(order_event['order_id'], 0)
+        self.assertEqual(order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(order_event['amount'], 100_000)
+        self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(order_event['target_amount'], 15_000)
+        self.assertEqual(order_event['filled_amount'], fill_amount)
+        self.assertEqual(order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(order_event['is_partial_allowed'], 1)
+        self.assertEqual(order_event['fee_rate'], 30)
+        self.assertEqual(order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
     def test_execute_order_partial_subsequent_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
@@ -769,6 +801,22 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[2][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
         self.assertEqual(inner_txns[2][b'txn'][b'arcv'], decode_address(self.user_address))
         self.assertEqual(inner_txns[2][b'txn'][b'aamt'], collected_target_amount)
+
+        events = decode_logs(inner_txns[0][b'dt'][b'lg'], registry_events)
+        self.assertEqual(len(events), 1)
+        order_event = events[0]
+        self.assertEqual(order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(order_event['order_id'], 0)
+        self.assertEqual(order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(order_event['amount'], 100_000)
+        self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(order_event['target_amount'], 15_000)
+        self.assertEqual(order_event['filled_amount'], 100_000)
+        self.assertEqual(order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(order_event['is_partial_allowed'], 1)
+        self.assertEqual(order_event['fee_rate'], 30)
+        self.assertEqual(order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
 
 class PutRecurringOrderTests(OrderProtocolBaseTestCase):
