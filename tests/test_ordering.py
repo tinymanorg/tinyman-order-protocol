@@ -277,7 +277,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         # Inner Transaction Checks
         inner_txns = cancel_order_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 1)
+        self.assertEqual(len(inner_txns), 2)
         self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
         self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.talgo_asset_id)
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
@@ -346,7 +346,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         # Inner Transaction Checks
         inner_txns = cancel_order_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 1)
+        self.assertEqual(len(inner_txns), 2)
         self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
         self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.talgo_asset_id)
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
@@ -435,7 +435,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 1
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -484,18 +484,18 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
 
         inner_txns = end_execute_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 2)
-        self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
-        self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.tiny_asset_id)
-        self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], fee_amount)
-
+        self.assertEqual(len(inner_txns), 3)
         self.assertEqual(inner_txns[1][b'txn'][b'type'], b'axfer')
         self.assertEqual(inner_txns[1][b'txn'][b'xaid'], self.tiny_asset_id)
         self.assertEqual(inner_txns[1][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
-        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.user_address))
-        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], collected_target_amount)
+        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], fee_amount)
+
+        self.assertEqual(inner_txns[2][b'txn'][b'type'], b'axfer')
+        self.assertEqual(inner_txns[2][b'txn'][b'xaid'], self.tiny_asset_id)
+        self.assertEqual(inner_txns[2][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
+        self.assertEqual(inner_txns[2][b'txn'][b'arcv'], decode_address(self.user_address))
+        self.assertEqual(inner_txns[2][b'txn'][b'aamt'], collected_target_amount)
 
     def test_execute_order_partial_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
@@ -563,7 +563,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 1
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -624,12 +624,12 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
 
         inner_txns = end_execute_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 1)
-        self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
-        self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.tiny_asset_id)
-        self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], fee_amount)
+        self.assertEqual(len(inner_txns), 2)
+        self.assertEqual(inner_txns[1][b'txn'][b'type'], b'axfer')
+        self.assertEqual(inner_txns[1][b'txn'][b'xaid'], self.tiny_asset_id)
+        self.assertEqual(inner_txns[1][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], fee_amount)
 
     def test_execute_order_partial_subsequent_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
@@ -708,7 +708,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 1
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -757,18 +757,19 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
 
         inner_txns = end_execute_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 2)
-        self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
-        self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.tiny_asset_id)
-        self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
-        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], fee_amount)
-
+        self.assertEqual(len(inner_txns), 3)
         self.assertEqual(inner_txns[1][b'txn'][b'type'], b'axfer')
         self.assertEqual(inner_txns[1][b'txn'][b'xaid'], self.tiny_asset_id)
         self.assertEqual(inner_txns[1][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
-        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.user_address))
-        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], collected_target_amount)
+        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], fee_amount)
+
+        self.assertEqual(inner_txns[2][b'txn'][b'type'], b'axfer')
+        self.assertEqual(inner_txns[2][b'txn'][b'xaid'], self.tiny_asset_id)
+        self.assertEqual(inner_txns[2][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
+        self.assertEqual(inner_txns[2][b'txn'][b'arcv'], decode_address(self.user_address))
+        self.assertEqual(inner_txns[2][b'txn'][b'aamt'], collected_target_amount)
+
 
 class PutRecurringOrderTests(OrderProtocolBaseTestCase):
     @classmethod
@@ -914,7 +915,7 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         # Inner Transaction Checks
         inner_txns = cancel_recurring_order_txn[b'dt'][b'itx']
 
-        self.assertEqual(len(inner_txns), 1)
+        self.assertEqual(len(inner_txns), 2)
         self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
         self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.talgo_asset_id)
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
@@ -1005,7 +1006,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + DAY
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         block = self.ledger.last_block
         block_txns = block[b'txns']
@@ -1121,7 +1122,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
 
         with self.assertRaises(LogicEvalError) as e:
-            filler_client._submit(transactions, additional_fees=3)
+            filler_client._submit(transactions, additional_fees=4)
         self.assertEqual(e.exception.source['line'], 'exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)')
 
     def test_subsequent_fill_successful(self):
@@ -1198,7 +1199,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
             ]
 
             self.ledger.next_timestamp = now + DAY + DAY * (current_recurrence + 1)
-            filler_client._submit(transactions, additional_fees=3)
+            filler_client._submit(transactions, additional_fees=4)
 
             filled_amount += fill_amount
 
@@ -1345,7 +1346,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + DAY
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         # Collect
         self.ledger.next_timestamp = now + 2 * DAY + 1
@@ -1463,7 +1464,7 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.ledger.next_timestamp = now + DAY + 1
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=3)
+        filler_client._submit(transactions, additional_fees=4)
 
         # Collect
         self.ledger.next_timestamp = now + 2 * DAY + 1

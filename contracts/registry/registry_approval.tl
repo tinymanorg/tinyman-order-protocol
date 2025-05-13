@@ -44,6 +44,7 @@ router:
     deendorse
     user_opt_in
     create_entry
+    emit_event
 end
 
 
