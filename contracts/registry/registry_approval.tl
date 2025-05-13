@@ -11,6 +11,12 @@ struct Entry:
     app_id: int
 end
 
+# Name: v<version>
+struct AppVersion:
+    approval_hash: bytes[32]
+    unused: bytes[950]
+end
+
 
 # Global State
 
@@ -21,6 +27,7 @@ const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_thresho
 const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
+const bytes LATEST_VERSION_KEY = "latest_version"
 
 # Local State
 
@@ -256,10 +263,7 @@ func verify_update(version: int):
     assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
     assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
 
-    int exists
-    bytes expected_approval_hash
-    exists, expected_approval_hash = box_get(concat("v", itob(version)))
-    assert(exists)
+    box<AppVersion> version_box = OpenBox(concat("v", itob(version)) 
 
     # 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
     int last_page = Gtxn[app_update_index].NumApprovalProgramPages
@@ -268,7 +272,7 @@ func verify_update(version: int):
         chunk_hashes = concat(chunk_hashes, sha256(Gtxn[app_update_index].ApprovalProgramPages[i]))
     end
     bytes approval_hash = sha256(chunk_hashes)
-    assert(approval_hash == expected_approval_hash)
+    assert(approval_hash == version_box.approval_hash)
 
     return
 end
@@ -279,8 +283,13 @@ end
 func approve_version(version: int, approval_hash: bytes[32]):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
 
+    # the hash can be updated for the current version or a new version but not a past version
+    assert(version >= app_global_get(LATEST_VERSION_KEY))
+    app_global_put(LATEST_VERSION_KEY, version)
+
     # approval_hash must be computed using the same algorithm as used in verify_update
-    box_put(concat("v", itob(version)), approval_hash)
+    box<AppVersion> version_box = Box(concat("v", itob(version)) 
+    version_box.approval_hash = approval_hash
 
     return
 end

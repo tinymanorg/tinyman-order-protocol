@@ -144,8 +144,8 @@ func post_update():
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
-    # This will fail the update if the app is already at the same version
-    assert(app_global_get(VERSION_KEY) != VERSION)
+    # This will fail the update if the app is already at the same or higher version
+    assert(app_global_get(VERSION_KEY) > VERSION)
 
     # any version specific 'migrations' can be done here in future versions
 
