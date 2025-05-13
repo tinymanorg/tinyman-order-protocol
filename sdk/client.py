@@ -55,7 +55,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
-                app_args=[b"create_application", self.registry_app_id, self.vault_app_id, decode_address(self.user_address)],
+                app_args=[b"create_application", self.registry_app_id, self.vault_app_id],
                 approval_program=order_approval_program.bytecode,
                 clear_program=order_clear_state_program.bytecode,
                 global_schema=order_app_global_schema,

@@ -113,7 +113,6 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
 
         self.ledger.global_states[app_id] = {
             USER_ADDRESS_KEY: decode_address(app_creator_address),
-            MANAGER_KEY: decode_address(self.register_application_address),
             REGISTRY_APP_ID_KEY: self.registry_app_id,
             REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
             VAULT_APP_ID_KEY: self.vault_app_id,

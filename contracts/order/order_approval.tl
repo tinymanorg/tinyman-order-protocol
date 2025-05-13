@@ -49,9 +49,6 @@ const bytes VAULT_APP_ID_KEY = "vault_app_id"
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
 
-const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
-const bytes MANAGER_KEY = "manager"
-
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 
 const bytes VERSION_KEY = "version"
@@ -85,8 +82,6 @@ router:
     update_application
     post_update
     init
-    propose_manager
-    accept_manager
     asset_opt_in
     put_order
     cancel_order
@@ -102,9 +97,8 @@ end
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(registry_app_id: int, vault_app_id: int, manager_address: bytes[32]):
+func create_application(registry_app_id: int, vault_app_id: int):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
-    app_global_put(MANAGER_KEY, manager_address)
 
     app_global_put(REGISTRY_APP_ID_KEY, registry_app_id)
     bytes registry_app_account_address 
@@ -114,8 +108,8 @@ func create_application(registry_app_id: int, vault_app_id: int, manager_address
 
     app_global_put(VERSION_KEY, VERSION)
 
-    # create_application(user_address,registry_app_id,vault_app_id,manager_address)
-    log(ARC28Event("create_application(address,uint64,uint64,address)", Txn.Sender, itob(registry_app_id), itob(vault_app_id), manager_address))
+    # create_application(user_address,registry_app_id,vault_app_id)
+    log(ARC28Event("create_application(address,uint64,uint64)", Txn.Sender, itob(registry_app_id), itob(vault_app_id)))
     return
 end
 
@@ -155,40 +149,6 @@ func post_update():
     return
 end
 
-
-# Permission: manager
-@public()
-func init():
-    assert(Txn.Sender == app_global_get(MANAGER_KEY))
-
-    log(ARC28Event("init()"))
-    return
-end
-
-
-# permission: manager
-@public()
-func propose_manager(new_manager: bytes[32]):
-    assert(Txn.Sender == app_global_get(MANAGER_KEY))
-
-    app_global_put(PROPOSED_MANAGER_KEY, new_manager)
-    log(ARC28Event("propose_manager(address)", new_manager))
-    return
-end
-
-
-# The proposed manager must call this function to become the manager.
-# permission: proposed_manager
-@public()
-func accept_manager():
-    bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY)
-    assert(Txn.Sender == proposed_manager)
-
-    app_global_put(MANAGER_KEY, proposed_manager)
-    app_global_put(PROPOSED_MANAGER_KEY, "")
-    log(ARC28Event("accept_manager(address)", proposed_manager))
-    return
-end
 
 
 @public()
