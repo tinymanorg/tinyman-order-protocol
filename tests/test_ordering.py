@@ -16,7 +16,7 @@ from sdk.constants import *
 from sdk.client import OrderingClient
 from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
-from sdk.structs import Order
+from sdk.structs import Order, AppVersion
 
 from tests.constants import order_approval_program, order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
 from tests.core import OrderProtocolBaseTestCase
@@ -36,6 +36,14 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
         now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        version = 1
+        key = b"v" + version.to_bytes(8, "big")
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+        struct = AppVersion()
+        struct.approval_hash = approval_hash
+        self.ledger.set_box(self.registry_app_id, key, struct._data)
+        self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
         # Create Entry
         self.ledger.next_timestamp = now + DAY
@@ -62,6 +70,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
                 REGISTRY_APP_ID_KEY: self.registry_app_id,
                 REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                VERSION_KEY: version,
             }
         )
 

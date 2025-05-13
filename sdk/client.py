@@ -38,6 +38,7 @@ class OrderingClient(BaseClient):
     def create_order_app(self):
         sp = self.get_suggested_params()
 
+        version = self.get_global(b"latest_version", app_id=self.registry_app_id)
         entry_box_name = self.get_registry_entry_box_name(self.user_address)
         new_boxes = {}
         if not self.box_exists(entry_box_name, self.registry_app_id):
@@ -69,6 +70,7 @@ class OrderingClient(BaseClient):
                 app_args=["create_entry"],
                 boxes=[
                     (0, entry_box_name),
+                    (self.registry_app_id, b"v" + version.to_bytes(8, "big"))
                 ],
             )
         ]

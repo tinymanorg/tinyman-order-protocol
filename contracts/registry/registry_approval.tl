@@ -33,8 +33,6 @@ const bytes LATEST_VERSION_KEY = "latest_version"
 
 const bytes IS_ENDORSED_KEY = "is_endorsed"
 
-# TODO
-const bytes ORDER_APP_HASH = 0x53306a90a3ef47f75247f4bc2ebe5b61f97af3aa0f331ce03e195f97bcf68f60
 
 router:
     create_application
@@ -239,8 +237,7 @@ func create_entry():
     assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
     assert(Gtxn[app_creation_index].ApplicationArgs[2] == itob(app_global_get(VAULT_APP_ID_KEY)))
 
-    bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram)
-    assert(approval_hash == ORDER_APP_HASH)
+    verify_approval_program(app_creation_index, app_global_get(LATEST_VERSION_KEY))
 
     entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
 
@@ -263,16 +260,7 @@ func verify_update(version: int):
     assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
     assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
 
-    box<AppVersion> version_box = OpenBox(concat("v", itob(version)) 
-
-    # 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
-    int last_page = Gtxn[app_update_index].NumApprovalProgramPages
-    bytes chunk_hashes = ""
-    for i in 0:last_page:
-        chunk_hashes = concat(chunk_hashes, sha256(Gtxn[app_update_index].ApprovalProgramPages[i]))
-    end
-    bytes approval_hash = sha256(chunk_hashes)
-    assert(approval_hash == version_box.approval_hash)
+    verify_approval_program(app_update_index, version)
 
     return
 end
@@ -288,9 +276,24 @@ func approve_version(version: int, approval_hash: bytes[32]):
     app_global_put(LATEST_VERSION_KEY, version)
 
     # approval_hash must be computed using the same algorithm as used in verify_update
-    box<AppVersion> version_box = Box(concat("v", itob(version)) 
+    box<AppVersion> version_box = Box(concat("v", itob(version)))
     version_box.approval_hash = approval_hash
 
+    return
+end
+
+
+func verify_approval_program(gtxn_index: int, version: int):
+    box<AppVersion> version_box = OpenBox(concat("v", itob(version)))
+
+    # 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
+    int last_page = Gtxn[gtxn_index].NumApprovalProgramPages
+    bytes chunk_hashes = ""
+    for i in 0:last_page:
+        chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
+    end
+    bytes approval_hash = sha256(chunk_hashes)
+    assert(approval_hash == version_box.approval_hash)
     return
 end
 
