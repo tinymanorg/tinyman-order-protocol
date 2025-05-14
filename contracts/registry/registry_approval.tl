@@ -11,6 +11,12 @@ struct Entry:
     app_id: int
 end
 
+# Name: v<version>
+struct AppVersion:
+    approval_hash: bytes[32]
+    unused: bytes[950]
+end
+
 
 # Global State
 
@@ -21,13 +27,12 @@ const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_thresho
 const bytes ENTRY_COUNT_KEY = "entry_count"
 const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
 const bytes MANAGER_KEY = "manager"
+const bytes LATEST_VERSION_KEY = "latest_version"
 
 # Local State
 
 const bytes IS_ENDORSED_KEY = "is_endorsed"
 
-# TODO
-const bytes ORDER_APP_HASH = 0xac64fe0ed603bcb54e068a1d9c3f5565d6af3f78223c5656d41236f174b158f0
 
 router:
     create_application
@@ -44,6 +49,8 @@ router:
     deendorse
     user_opt_in
     create_entry
+    verify_update
+    approve_version
 end
 
 
@@ -230,8 +237,7 @@ func create_entry():
     assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
     assert(Gtxn[app_creation_index].ApplicationArgs[2] == itob(app_global_get(VAULT_APP_ID_KEY)))
 
-    bytes approval_hash = sha512_256(Gtxn[app_creation_index].ApprovalProgram)
-    assert(approval_hash == ORDER_APP_HASH)
+    verify_approval_program(app_creation_index, app_global_get(LATEST_VERSION_KEY))
 
     entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
 
@@ -241,6 +247,53 @@ func create_entry():
     # Logs
     log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
 
+    return
+end
+
+
+# Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program.
+# Permission: Anyone
+@public()
+func verify_update(version: int):
+
+    int app_update_index = Txn.GroupIndex - 1
+    assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
+    assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
+
+    verify_approval_program(app_update_index, version)
+
+    return
+end
+
+
+# Permission: Manager
+@public()
+func approve_version(version: int, approval_hash: bytes[32]):
+    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+
+    # the hash can be updated for the current version or a new version but not a past version
+    assert(version >= app_global_get(LATEST_VERSION_KEY))
+    app_global_put(LATEST_VERSION_KEY, version)
+
+    # approval_hash must be computed using the same algorithm as used in verify_update
+    box<AppVersion> version_box = Box(concat("v", itob(version)))
+    version_box.approval_hash = approval_hash
+
+    return
+end
+
+
+func verify_approval_program(gtxn_index: int, version: int):
+    box<AppVersion> version_box = OpenBox(concat("v", itob(version)))
+
+    # 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
+    int last_page = Gtxn[gtxn_index].NumApprovalProgramPages
+    bytes chunk_hashes = ""
+    for i in 0:last_page:
+        chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
+    end
+    bytes approval_hash = sha256(chunk_hashes)
+    assert(approval_hash == version_box.approval_hash)
     return
 end
 

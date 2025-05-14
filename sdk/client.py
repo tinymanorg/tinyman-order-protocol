@@ -38,6 +38,7 @@ class OrderingClient(BaseClient):
     def create_order_app(self):
         sp = self.get_suggested_params()
 
+        version = self.get_global(b"latest_version", app_id=self.registry_app_id)
         entry_box_name = self.get_registry_entry_box_name(self.user_address)
         new_boxes = {}
         if not self.box_exists(entry_box_name, self.registry_app_id):
@@ -54,7 +55,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
-                app_args=[b"create_application", self.registry_app_id, self.vault_app_id, decode_address(self.user_address)],
+                app_args=[b"create_application", self.registry_app_id, self.vault_app_id],
                 approval_program=order_approval_program.bytecode,
                 clear_program=order_clear_state_program.bytecode,
                 global_schema=order_app_global_schema,
@@ -69,6 +70,7 @@ class OrderingClient(BaseClient):
                 app_args=["create_entry"],
                 boxes=[
                     (0, entry_box_name),
+                    (self.registry_app_id, b"v" + version.to_bytes(8, "big"))
                 ],
             )
         ]
@@ -455,7 +457,7 @@ class OrderingClient(BaseClient):
 
         return txn
 
-    def update_ordering_app(self, approval_program, clear_program):
+    def update_ordering_app(self, version, approval_program):
         sp = self.get_suggested_params()
 
         transactions = [
@@ -463,10 +465,23 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 index=self.app_id,
-                app_args=[b"update_application"],
+                app_args=[b"update_application", version],
                 approval_program=approval_program,
-                clear_program=clear_program,
-            )
+                clear_program=order_clear_state_program.bytecode,
+            ),
+            transaction.ApplicationNoOpTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.registry_app_id,
+                app_args=[b"verify_update", version],
+                boxes=[(self.registry_app_id, b"v" + version.to_bytes(8, "big"))]
+            ),
+            transaction.ApplicationNoOpTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.app_id,
+                app_args=[b"post_update"],
+            ),
         ]
 
         return self._submit(transactions)
