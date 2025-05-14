@@ -4,6 +4,7 @@
 REGISTRY_APP_ID_KEY = b"registry_app_id"
 REGISTRY_APP_ACCOUNT_ADDRESS_KEY = b"registry_app_account_address"
 VAULT_APP_ID_KEY = b"vault_app_id"
+ROUTER_APP_ID_KEY = b"router_app_id"
 ORDER_FEE_RATE_KEY = b"order_fee_rate"
 GOVERNOR_ORDER_FEE_RATE_KEY = b"governor_order_fee_rate"
 GOVERNOR_FEE_RATE_POWER_THRESHOLD = b"governor_fee_rate_power_threshold"

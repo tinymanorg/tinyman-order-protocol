@@ -4,7 +4,7 @@ from typing import List
 
 from algosdk.encoding import decode_address
 from algosdk import transaction
-from algosdk.encoding import decode_address
+from algosdk.encoding import decode_address, encode_address
 from algosdk.logic import get_application_address
 from tinyman.utils import TransactionGroup, int_to_bytes
 
@@ -18,12 +18,14 @@ from tests.constants import order_approval_program, order_clear_state_program, o
 
 
 class OrderingClient(BaseClient):
-    def __init__(self, algod, registry_app_id, vault_app_id, user_address, user_sk, order_app_id=None) -> None:
+    def __init__(self, algod, registry_app_id, vault_app_id, router_app_id, user_address, user_sk, order_app_id=None) -> None:
         self.algod = algod
         self.registry_app_id = registry_app_id
         self.registry_application_address = get_application_address(registry_app_id)
         self.vault_app_id = vault_app_id
         self.vault_application_address = get_application_address(vault_app_id)
+        self.router_app_id = router_app_id
+        self.router_application_address = get_application_address(router_app_id)
         self.app_id = order_app_id
         self.application_address = get_application_address(self.app_id) if self.app_id else None
         self.user_address = user_address
@@ -55,7 +57,7 @@ class OrderingClient(BaseClient):
                 sender=self.user_address,
                 sp=sp,
                 on_complete=transaction.OnComplete.NoOpOC,
-                app_args=[b"create_application", self.registry_app_id, self.vault_app_id],
+                app_args=[b"create_application", self.registry_app_id, self.vault_app_id, self.router_app_id],
                 approval_program=order_approval_program.bytecode,
                 clear_program=order_clear_state_program.bytecode,
                 global_schema=order_app_global_schema,
@@ -372,7 +374,7 @@ class OrderingClient(BaseClient):
         sp = self.get_suggested_params()
 
         order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "TriggerOrder")
+        order = self.get_box(order_box_name, "RecurringOrder")
 
         transactions = [
             transaction.ApplicationCallTxn(
@@ -393,75 +395,53 @@ class OrderingClient(BaseClient):
             )
         ]
 
-        return self._submit(transactions, additional_fees=2)
+        return self._submit(transactions, additional_fees=1)
 
-    def prepare_start_execute_recurring_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
-        """
-        It is assumed that the caller of this method is a filler.
-
-        Parameters
-        ----------
-        order_app_id : Id of the account's order app that will be filled.
-        account_address : Account whom its order will be filled.
-        """
+    def execute_recurring_order(self, order_app_id: int, order_id: int, route_bytes: bytes, pools_bytes: bytes, num_swaps: int, grouped_references: list, extra_txns=0):
+        sp = self.get_suggested_params()
 
         order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
+        user_address = encode_address(self.get_global(USER_ADDRESS_KEY, app_id=order_app_id))
 
-        txn = transaction.ApplicationCallTxn(
+        num_inner_txns = (num_swaps * 3) + 2
+
+        transactions = [
+            transaction.ApplicationCallTxn(
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
                 sp=sp,
                 index=order_app_id,
                 app_args=[
-                    "start_execute_recurring_order",
-                    int_to_bytes(order_id),
-                    int_to_bytes(fill_amount),
-                    int_to_bytes(index_diff)
+                    "execute_recurring_order",
+                    order_id,
+                    route_bytes,
+                    pools_bytes,
+                    num_swaps,
                 ],
                 boxes=[
                     (0, order_box_name),
+                    (self.registry_app_id, self.get_registry_entry_box_name(user_address)),
                 ],
-                accounts=[account_address],
-                foreign_assets=[order.asset_id]
+                accounts=grouped_references[0]["accounts"] + [self.registry_application_address],
+                foreign_assets=grouped_references[0]["assets"],
+                foreign_apps=[self.registry_app_id, self.router_app_id] + grouped_references[0]["apps"],
             )
-
-        return txn
-
-    def prepare_end_execute_recurring_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
-        """
-        It is assumed that the caller of this method is a filler.
-
-        Parameters
-        ----------
-        order_app_id : Id of the account's order app that will be filled.
-        account_address : Account whom its order will be filled.
-        """
-
-        order_box_name = self.get_recurring_order_box_name(order_id)
-        order = self.get_box(order_box_name, "TriggerOrder", app_id=order_app_id)
-
-        txn = transaction.ApplicationCallTxn(
+        ]
+        for i in range(1, len(grouped_references)):
+            transactions.append(transaction.ApplicationCallTxn(
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
                 sp=sp,
-                index=order_app_id,
+                index=self.router_app_id,
                 app_args=[
-                    "end_execute_recurring_order",
-                    int_to_bytes(order_id),
-                    int_to_bytes(fill_amount),
-                    int_to_bytes(index_diff)
+                    "noop",
                 ],
-                boxes=[
-                    (0, order_box_name),
-                    (self.registry_app_id, self.get_registry_entry_box_name(account_address)),
-                ],
-                accounts=[account_address, self.registry_application_address],
-                foreign_apps=[self.registry_app_id],
-                foreign_assets=[order.target_asset_id]
-            )
+                accounts=grouped_references[i]["accounts"],
+                foreign_assets=grouped_references[i]["assets"],
+                foreign_apps=grouped_references[i]["apps"],
+            ))
 
-        return txn
+        return self._submit(transactions, additional_fees=num_inner_txns + extra_txns)
 
     def update_ordering_app(self, version, approval_program):
         sp = self.get_suggested_params()

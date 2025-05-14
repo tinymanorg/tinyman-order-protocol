@@ -223,18 +223,8 @@ cancel_recurring_order_event = Event(
 )
 
 
-start_execute_recurring_order_event = Event(
-    name="start_execute_recurring_order",
-    args=[
-        abi.Argument(arg_type="address", name="user_address"),
-        abi.Argument(arg_type="uint64", name="order_id"),
-        abi.Argument(arg_type="address", name="filler_address"),
-    ]
-)
-
-
-end_execute_recurring_order_event = Event(
-    name="end_execute_recurring_order",
+execute_recurring_order_event = Event(
+    name="execute_recurring_order",
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
@@ -272,6 +262,5 @@ ordering_events = [
     recurring_order_event,
     put_recurring_order_event,
     cancel_recurring_order_event,
-    start_execute_recurring_order_event,
-    end_execute_recurring_order_event,
+    execute_recurring_order_event,
 ]
