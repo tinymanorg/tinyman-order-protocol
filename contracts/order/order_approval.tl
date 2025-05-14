@@ -40,11 +40,22 @@ struct RecurringOrder:
 end
 
 
+struct Address:
+    address: bytes[32]
+end
+
+
+# External App IDs
+
+# const int REGISTRY_APP_ID = <REGISTRY_APP_ID>
+
+
 # Global State
 
 const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
 const bytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY = "registry_app_account_address"
 const bytes VAULT_APP_ID_KEY = "vault_app_id"
+const bytes ROUTER_APP_ID_KEY = "router_app_id"
 
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
@@ -88,15 +99,14 @@ router:
     end_execute_trigger_order
     put_recurring_order
     cancel_recurring_order
-    start_execute_recurring_order
-    end_execute_recurring_order
+    execute_recurring_order
     collect
 end
 
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(registry_app_id: int, vault_app_id: int):
+func create_application(registry_app_id: int, vault_app_id: int, router_app_id: int):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
 
     app_global_put(REGISTRY_APP_ID_KEY, registry_app_id)
@@ -104,6 +114,7 @@ func create_application(registry_app_id: int, vault_app_id: int):
     _, registry_app_account_address = app_params_get(AppAddress, registry_app_id)
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+    app_global_put(ROUTER_APP_ID_KEY, router_app_id)
 
     app_global_put(VERSION_KEY, VERSION)
 
@@ -483,75 +494,78 @@ func cancel_recurring_order(order_id: int):
 end
 
 
-# Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
-# An executor must call `end_execute_recurring_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
-# Permission: Everyone
+# Description: Method allows an authorised filler to execute a recurring order using the Tinyman Router
+# Permission: Filler
 @public()
-func start_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
+func execute_recurring_order(order_id: int, route: int[8], pools: Address[8], swaps: int):
     box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
 
-    # Assertions
-    assert(index_diff >= 2)
+    # Assert this txn is not in an atomic sandwich
+    assert(Txn.GroupIndex == 0)
+    assert(Global.CallerApplicationID == 0)
 
-    # Assert that Txn.Sender is permissioned to fill recurring orders.
+    # Assert that Txn.Sender is allowed to fill recurring orders.
     check_is_endorsed(Txn.Sender)
-
-    assert(fill_amount == order.amount)
 
     assert(Global.LatestTimestamp >= (order.last_fill_timestamp + order.interval))
 
-    int end_execute_order_txn_index = Txn.GroupIndex + index_diff
-    check_execute_order_txn(end_execute_order_txn_index, "end_execute_recurring_order", order_id, fill_amount, index_diff)
+    # Validate the supplied route
+    assert(route[0] == order.asset_id)
+    assert(route[swaps] == order.target_asset_id)
 
-    # Transfer `fill_amount` to executor.
-    transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
+    # Swap through the Tinyman Router using the supplied route
+    int received_amount = do_router_swap(order.amount, order.min_target_amount, route, pools, swaps)
 
-    # Logs
-    log(ARC28Event("start_execute_recurring_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
-
-    return
-end
-
-
-# Description: Method checks the validity of the execution between `start_execute_recurring_order` and `end_execute_recurring_order`.
-# An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
-# Permission: Everyone
-@public()
-func end_execute_recurring_order(order_id: int, fill_amount: int, index_diff: int):
-    bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
-
-    int start_execute_order_txn_index = Txn.GroupIndex - index_diff
-    check_execute_order_txn(start_execute_order_txn_index, "start_execute_recurring_order", order_id, fill_amount, index_diff)
-
-    # Assert that user received the target asset.
-    int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, 0)
+    # Assert that the received amount is within expected range.
     assert((received_amount >= order.min_target_amount) && (received_amount <= order.max_target_amount))
 
-    order.remaining_recurrences = order.remaining_recurrences - 1
-    order.last_fill_timestamp = Global.LatestTimestamp
-
-    # Calculate the amount after feeing.
+    # Calculate the amount after fees.
     int fee_amount = calculate_fee_amount(received_amount, order.fee_rate)
     assert(fee_amount)
 
+    # Update order
+    order.remaining_recurrences = order.remaining_recurrences - 1
+    order.last_fill_timestamp = Global.LatestTimestamp
     order.collected_target_amount = order.collected_target_amount + (received_amount - fee_amount)
 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("end_execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    log(ARC28Event("execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(order.amount), itob(received_amount)))
 
-    # Transfers
+    # Transfer fee to registry app account
     transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
+    # If no more recurrences, transfer accumulated amount to the user address and close the order
     if !order.remaining_recurrences:
         transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
 
     return
+end
+
+func do_router_swap(input_amount: int, output_amount: int, route: int[8], pools: Address[8], swaps: int) int:
+    bytes router_app_address
+    _, router_app_address = app_params_get(AppAddress, app_global_get(ROUTER_APP_ID_KEY))
+    inner_group:
+        transfer(route[0], input_amount, Global.CurrentApplicationAddress, router_app_address)
+        inner_txn:
+            TypeEnum: Appl
+            Fee: 0
+            ApplicationID: app_global_get(ROUTER_APP_ID_KEY)
+            ApplicationArgs[0]: "swap"
+            ApplicationArgs[1]: itob(input_amount)
+            ApplicationArgs[2]: itob(output_amount)
+            ApplicationArgs[3]: route
+            ApplicationArgs[4]: pools
+            ApplicationArgs[5]: itob(swaps)
+        end
+    end
+    int received_amount = extract_uint64(Itxn.LastLog, 28)
+    return received_amount
 end
 
 
