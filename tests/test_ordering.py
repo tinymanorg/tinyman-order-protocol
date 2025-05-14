@@ -2,20 +2,23 @@ from datetime import datetime, timezone
 from random import randint
 
 from algojig.exceptions import LogicEvalError
+from algojig import TealishProgram
+
 from algosdk import transaction
 from algosdk.account import generate_account
 from algosdk.encoding import decode_address, encode_address
 from algosdk.transaction import OnComplete
 
+from sdk.utils import calculate_approval_hash
 from tinyman.utils import TransactionGroup
 
 from sdk.constants import *
 from sdk.client import OrderingClient
 from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
-from sdk.structs import TriggerOrder
+from sdk.structs import TriggerOrder, AppVersion
 
-from tests.constants import order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
+from tests.constants import order_approval_program, order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -33,6 +36,14 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
         now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        version = 1
+        key = b"v" + version.to_bytes(8, "big")
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+        struct = AppVersion()
+        struct.approval_hash = approval_hash
+        self.ledger.set_box(self.registry_app_id, key, struct._data)
+        self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
         # Create Entry
         self.ledger.next_timestamp = now + DAY
@@ -55,12 +66,36 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
             self.ledger.global_states[order_app_id],
             {
                 USER_ADDRESS_KEY: decode_address(self.user_address),
-                MANAGER_KEY: decode_address(self.user_address),
                 REGISTRY_APP_ID_KEY: self.registry_app_id,
                 REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                VERSION_KEY: version,
             }
         )
+
+    def test_update_order_app(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 1)
+
+        approval_program = TealishProgram('contracts/order/order_approval.tl')
+        approval_program.tealish_source = approval_program.tealish_source.replace("VERSION = 1", "VERSION = 2")
+        approval_program.compile()
+        update_bytecode = approval_program.bytecode
+
+        version = 2
+        key = b"v" + version.to_bytes(8, "big")
+        approval_hash = calculate_approval_hash(update_bytecode)
+        self.ledger.set_box(self.registry_app_id, key, approval_hash)
+
+        self.ordering_client.update_ordering_app(version, update_bytecode)
+
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
 
 
 class PutOrderTests(OrderProtocolBaseTestCase):
