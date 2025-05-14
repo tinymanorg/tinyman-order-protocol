@@ -45,11 +45,6 @@ struct Address:
 end
 
 
-# External App IDs
-
-# const int REGISTRY_APP_ID = <REGISTRY_APP_ID>
-
-
 # Global State
 
 const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
