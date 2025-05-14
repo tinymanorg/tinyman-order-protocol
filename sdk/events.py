@@ -59,8 +59,8 @@ deendorse_event = Event(
 
 
 # Order Events
-order_event = Event(
-    name="order",
+trigger_order_event = Event(
+    name="trigger_order",
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
@@ -78,24 +78,24 @@ order_event = Event(
 )
 
 
-put_order_event = Event(
-    name="put_order",
+put_trigger_order_event = Event(
+    name="put_trigger_order",
     args=[
         abi.Argument(arg_type="uint64", name="order_id"),
     ]
 )
 
 
-cancel_order_event = Event(
-    name="cancel_order",
+cancel_trigger_order_event = Event(
+    name="cancel_trigger_order",
     args=[
         abi.Argument(arg_type="uint64", name="order_id"),
     ]
 )
 
 
-start_execute_order_event = Event(
-    name="start_execute_order",
+start_execute_trigger_order_event = Event(
+    name="start_execute_trigger_order",
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
@@ -104,8 +104,8 @@ start_execute_order_event = Event(
 )
 
 
-end_execute_order_event = Event(
-    name="end_execute_order",
+end_execute_trigger_order_event = Event(
+    name="end_execute_trigger_order",
     args=[
         abi.Argument(arg_type="address", name="user_address"),
         abi.Argument(arg_type="uint64", name="order_id"),
@@ -196,11 +196,11 @@ registry_events = [
 
 
 ordering_events = [
-    order_event,
-    put_order_event,
-    cancel_order_event,
-    start_execute_order_event,
-    end_execute_order_event,
+    trigger_order_event,
+    put_trigger_order_event,
+    cancel_trigger_order_event,
+    start_execute_trigger_order_event,
+    end_execute_trigger_order_event,
     collect_event,
     recurring_order_event,
     put_recurring_order_event,

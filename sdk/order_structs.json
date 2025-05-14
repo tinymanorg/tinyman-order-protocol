@@ -1,6 +1,6 @@
 {
   "structs": {
-    "Order": {
+    "TriggerOrder": {
       "size": 80,
       "fields": {
         "asset_id": {
