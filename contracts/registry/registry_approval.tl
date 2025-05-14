@@ -27,7 +27,7 @@ const bytes MANAGER_KEY = "manager"
 const bytes IS_ENDORSED_KEY = "is_endorsed"
 
 # TODO
-const bytes ORDER_APP_HASH = 0xac64fe0ed603bcb54e068a1d9c3f5565d6af3f78223c5656d41236f174b158f0
+const bytes ORDER_APP_HASH = 0x8c35f9049d0f8992f62315e749107b3e8c6fd8af0ce4be6f1f0fed9c93bf7388
 
 router:
     create_application
@@ -44,6 +44,7 @@ router:
     deendorse
     user_opt_in
     create_entry
+    emit_event
 end
 
 
@@ -241,6 +242,31 @@ func create_entry():
     # Logs
     log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
 
+    return
+end
+
+
+@public()
+func emit_event(event_name: bytes, user_address: bytes, data: bytes):
+    box<Entry> entry = OpenBox(Concat("e", user_address))
+    int app_id = Global.CallerApplicationID
+    assert(app_id == entry.app_id)
+
+    bytes event
+    if event_name == "put_trigger_order":
+        event = ARC28Event("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "update_trigger_order":
+        event = ARC28Event("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "cancel_trigger_order":
+        event = ARC28Event("cancel_trigger_order(uint64,uint64)", itob(app_id), data)
+    elif event_name == "put_recurring_order":
+        event = ARC28Event("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "update_recurring_order":
+        event = ARC28Event("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+    elif event_name == "cancel_recurring_order":
+        event = ARC28Event("cancel_recurring_order(uint64,uint64)", itob(app_id), data)
+    end
+    log(event)
     return
 end
 

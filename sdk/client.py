@@ -166,12 +166,13 @@ class OrderingClient(BaseClient):
                 foreign_apps=[self.registry_app_id, self.vault_app_id],
                 boxes=[
                     (0, order_box_name),
-                    (self.vault_app_id, decode_address(self.user_address))
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.get_registry_entry_box_name(self.user_address)),
                 ],
             )
         ]
 
-        return self._submit(transactions, additional_fees=1 + len(assets_to_optin))
+        return self._submit(transactions, additional_fees=2 + len(assets_to_optin))
 
     def cancel_trigger_order(self, order_id: int):
         sp = self.get_suggested_params()
@@ -191,13 +192,14 @@ class OrderingClient(BaseClient):
                 ],
                 boxes=[
                     (0, order_box_name),
+                    (self.registry_app_id, self.get_registry_entry_box_name(self.user_address)),
                 ],
                 foreign_assets=[order.asset_id],
                 foreign_apps=[self.registry_app_id]
             )
         ]
 
-        return self._submit(transactions, additional_fees=1)
+        return self._submit(transactions, additional_fees=2)
 
     def prepare_start_execute_trigger_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
         """
@@ -257,7 +259,8 @@ class OrderingClient(BaseClient):
                     int_to_bytes(index_diff)
                 ],
                 boxes=[
-                    (0, order_box_name)
+                    (0, order_box_name),
+                    (self.registry_app_id, self.get_registry_entry_box_name(account_address)),
                 ],
                 accounts=[account_address, self.registry_application_address],
                 foreign_apps=[self.registry_app_id],
@@ -355,12 +358,13 @@ class OrderingClient(BaseClient):
                 foreign_apps=[self.registry_app_id, self.vault_app_id],
                 boxes=[
                     (0, order_box_name),
-                    (self.vault_app_id, decode_address(self.user_address))
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.get_registry_entry_box_name(self.user_address)),
                 ],
             )
         ]
 
-        return self._submit(transactions, additional_fees=1 + len(assets_to_optin))
+        return self._submit(transactions, additional_fees=2 + len(assets_to_optin))
 
     def cancel_recurring_order(self, order_id: int):
         sp = self.get_suggested_params()
@@ -380,13 +384,14 @@ class OrderingClient(BaseClient):
                 ],
                 boxes=[
                     (0, order_box_name),
+                    (self.registry_app_id, self.get_registry_entry_box_name(self.user_address)),
                 ],
                 foreign_assets=[order.asset_id],
                 foreign_apps=[self.registry_app_id]
             )
         ]
 
-        return self._submit(transactions, additional_fees=1)
+        return self._submit(transactions, additional_fees=2)
 
     def prepare_start_execute_recurring_order_transaction(self, order_app_id: int, order_id: int, account_address: str, fill_amount: int, index_diff: int, sp) -> transaction.ApplicationCallTxn:
         """
@@ -446,7 +451,8 @@ class OrderingClient(BaseClient):
                     int_to_bytes(index_diff)
                 ],
                 boxes=[
-                    (0, order_box_name)
+                    (0, order_box_name),
+                    (self.registry_app_id, self.get_registry_entry_box_name(account_address)),
                 ],
                 accounts=[account_address, self.registry_application_address],
                 foreign_apps=[self.registry_app_id],
