@@ -1099,13 +1099,13 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
 
         self.ledger.set_account_balance(self.ordering_client.router_application_address, 100_000, self.tiny_asset_id)
 
-        args = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
+        route_arg, pools_arg = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
 
         filler_client.execute_recurring_order(
             order_app_id=self.ordering_client.app_id,
             order_id=0,
-            route_bytes=args["route"],
-            pools_bytes=args["pools"],
+            route_bytes=route_arg,
+            pools_bytes=pools_arg,
             num_swaps=1,
             grouped_references=[
                 {
@@ -1189,14 +1189,14 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
 
         self.ledger.set_account_balance(self.ordering_client.router_application_address, 100_000, self.tiny_asset_id)
 
-        args = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
+        route_arg, pools_arg = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
 
         with self.assertRaises(LogicEvalError) as e:
             filler_client.execute_recurring_order(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
-                route_bytes=args["route"],
-                pools_bytes=args["pools"],
+                route_bytes=route_arg,
+                pools_bytes=pools_arg,
                 num_swaps=1,
                 grouped_references=[
                     {
@@ -1259,14 +1259,14 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
         for current_recurrence in range(target_recurrence):
             bought_amount = 50_000
 
-            args = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
+            route_arg, pools_arg = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
 
             self.ledger.next_timestamp = now + DAY + DAY * (current_recurrence + 1)
             filler_client.execute_recurring_order(
                 order_app_id=self.ordering_client.app_id,
                 order_id=0,
-                route_bytes=args["route"],
-                pools_bytes=args["pools"],
+                route_bytes=route_arg,
+                pools_bytes=pools_arg,
                 num_swaps=1,
                 grouped_references=[
                     {
