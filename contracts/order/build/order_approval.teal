@@ -282,10 +282,10 @@ __func__post_update:
     assert
     
     // This will fail the update if the app is already at the same or higher version
-    // tl:147: assert(app_global_get(VERSION_KEY) > VERSION)
+    // tl:147: assert(VERSION > app_global_get(VERSION_KEY))
+    pushint VERSION                                         // 1
     pushbytes VERSION_KEY                                   // "version"
     app_global_get
-    pushint VERSION                                         // 1
     >
     assert
     
