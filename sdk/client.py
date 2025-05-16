@@ -41,6 +41,9 @@ class OrderingClient(BaseClient):
         sp = self.get_suggested_params()
 
         version = self.get_global(b"latest_version", app_id=self.registry_app_id)
+        if version is None:
+            raise Exception("Registry app has no approved version. Unable to create order app.")
+
         entry_box_name = self.get_registry_entry_box_name(self.user_address)
         new_boxes = {}
         if not self.box_exists(entry_box_name, self.registry_app_id):
@@ -395,7 +398,7 @@ class OrderingClient(BaseClient):
             )
         ]
 
-        return self._submit(transactions, additional_fees=1)
+        return self._submit(transactions, additional_fees=2)
 
     def execute_recurring_order(self, order_app_id: int, order_id: int, route_bytes: bytes, pools_bytes: bytes, num_swaps: int, grouped_references: list, extra_txns=0):
         sp = self.get_suggested_params()
