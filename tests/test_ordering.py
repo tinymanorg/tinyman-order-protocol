@@ -85,6 +85,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
 
         self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 1)
 
+        # Mock Approve a version
         approval_program = TealishProgram('contracts/order/order_approval.tl')
         approval_program.tealish_source = approval_program.tealish_source.replace("VERSION = 1", "VERSION = 2")
         approval_program.compile()
@@ -93,7 +94,10 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         version = 2
         key = b"v" + version.to_bytes(8, "big")
         approval_hash = calculate_approval_hash(update_bytecode)
-        self.ledger.set_box(self.registry_app_id, key, approval_hash)
+        struct = AppVersion()
+        struct.approval_hash = approval_hash
+        self.ledger.set_box(self.registry_app_id, key, struct._data)
+        self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
         self.ordering_client.update_ordering_app(version, update_bytecode)
 
@@ -1381,41 +1385,36 @@ class CollectTests(OrderProtocolBaseTestCase):
         self.manager_client.endorse(filler_client.user_address)
 
         fill_amount = 100_000
-        bought_amount = 15_000
+        bought_amount = 50_000
         fee_rate = 30
         fee_amount = int((bought_amount * fee_rate) / 10_000)
         collected_target_amount = bought_amount - fee_amount
-        sp = filler_client.get_suggested_params()
-        transactions = [
-            filler_client.prepare_start_execute_recurring_order_transaction(
-                order_app_id=self.ordering_client.app_id,
-                order_id=0,
-                account_address=self.ordering_client.user_address,
-                fill_amount=fill_amount,
-                index_diff=2,
-                sp=sp
-            ),
-            transaction.AssetTransferTxn(
-                sender=filler_client.user_address,
-                sp=sp,
-                receiver=self.ordering_client.application_address,
-                amt=bought_amount,
-                index=self.tiny_asset_id
-            ),
-            filler_client.prepare_end_execute_recurring_order_transaction(
-                order_app_id=self.ordering_client.app_id,
-                order_id=0,
-                account_address=self.ordering_client.user_address,
-                fill_amount=fill_amount,
-                index_diff=2,
-                sp=sp
-            ),
-        ]
 
         self.ledger.next_timestamp = now + DAY + DAY
         self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
         self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
-        filler_client._submit(transactions, additional_fees=4)
+
+        self.ledger.opt_in_asset(self.ordering_client.router_application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.router_application_address, self.talgo_asset_id)
+
+        self.ledger.set_account_balance(self.ordering_client.router_application_address, 100_000, self.tiny_asset_id)
+
+        route_arg, pools_arg = encode_router_args(route=[self.talgo_asset_id, self.tiny_asset_id], pools=[])
+
+        filler_client.execute_recurring_order(
+            order_app_id=self.ordering_client.app_id,
+            order_id=0,
+            route_bytes=route_arg,
+            pools_bytes=pools_arg,
+            num_swaps=1,
+            grouped_references=[
+                {
+                    "assets": [self.talgo_asset_id, self.tiny_asset_id],
+                    "accounts": [],
+                    "apps": [],
+                }
+            ],
+        )
 
         # Collect
         self.ledger.next_timestamp = now + 2 * DAY + 1

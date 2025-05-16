@@ -6,14 +6,17 @@ from algosdk.account import generate_account
 from algosdk.encoding import decode_address, encode_address
 from algosdk.transaction import OnComplete
 
+from tinyman.swap_router.utils import encode_router_args
 from tinyman.utils import TransactionGroup
 
 from sdk.constants import *
 from sdk.client import RegistryClient
 from sdk.event import decode_logs
 from sdk.events import registry_events
+from sdk.structs import AppVersion
+from sdk.utils import calculate_approval_hash
 
-from tests.constants import registry_approval_program, registry_clear_state_program, WEEK, DAY, registry_app_global_schema, registry_app_local_schema, registry_app_extra_pages
+from tests.constants import registry_approval_program, registry_clear_state_program, WEEK, DAY, registry_app_global_schema, registry_app_local_schema, registry_app_extra_pages, order_approval_program
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -66,6 +69,15 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
         now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Mock Approve a version
+        version = 1
+        key = b"v" + version.to_bytes(8, "big")
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+        struct = AppVersion()
+        struct.approval_hash = approval_hash
+        self.ledger.set_box(self.registry_app_id, key, struct._data)
+        self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
         # Create Entry
         self.ledger.next_timestamp = now + DAY
