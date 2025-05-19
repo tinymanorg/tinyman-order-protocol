@@ -404,6 +404,7 @@ class OrderingClient(BaseClient):
         sp = self.get_suggested_params()
 
         order_box_name = self.get_recurring_order_box_name(order_id)
+        order = self.get_box(order_box_name, "RecurringOrder", app_id=order_app_id)
         user_address = encode_address(self.get_global(USER_ADDRESS_KEY, app_id=order_app_id))
 
         num_inner_txns = (num_swaps * 3) + 2
@@ -425,12 +426,12 @@ class OrderingClient(BaseClient):
                     (0, order_box_name),
                     (self.registry_app_id, self.get_registry_entry_box_name(user_address)),
                 ],
-                accounts=grouped_references[0]["accounts"] + [self.registry_application_address],
-                foreign_assets=grouped_references[0]["assets"],
-                foreign_apps=[self.registry_app_id, self.router_app_id] + grouped_references[0]["apps"],
+                accounts=[self.registry_application_address, user_address],
+                foreign_assets=[order.asset_id, order.target_asset_id],
+                foreign_apps=[self.registry_app_id, self.router_app_id],
             )
         ]
-        for i in range(1, len(grouped_references)):
+        for i in range(0, len(grouped_references)):
             transactions.append(transaction.ApplicationCallTxn(
                 sender=self.user_address,
                 on_complete=transaction.OnComplete.NoOpOC,
