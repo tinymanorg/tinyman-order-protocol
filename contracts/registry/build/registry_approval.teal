@@ -801,11 +801,12 @@ __func__approve_version:
     app_global_put
     
     // approval_hash must be computed using the same algorithm as used in verify_update
-    // tl:305: box<AppVersion> version_box = Box(concat("v", itob(version))) [slot 31]
+    // tl:305: box<AppVersion> version_box = CreateBox(concat("v", itob(version))) [slot 31]
     pushbytes "v"
     load 30                                                 // version
     itob
     concat
+    dup; pushint 982; box_create; assert                    // create & assert created
     store 31                                                // box:version_box
     // tl:306: version_box.approval_hash = approval_hash
     load 29                                                 // approval_hash
