@@ -153,7 +153,7 @@ func post_update():
     assert(VERSION > app_global_get(VERSION_KEY))
 
     # Update app ids to match registry
-    int registry_app_id = app_global_put(REGISTRY_APP_ID_KEY)
+    int registry_app_id = app_global_get(REGISTRY_APP_ID_KEY)
 
     int vault_app_id
     _, vault_app_id = app_global_get_ex(registry_app_id, VAULT_APP_ID_KEY)

@@ -21,6 +21,7 @@ end
 # Global State
 
 const bytes VAULT_APP_ID_KEY = "vault_app_id"
+const bytes ROUTER_APP_ID_KEY = "router_app_id"
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
 const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
@@ -57,15 +58,16 @@ end
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(vault_app_id: int, manager_address: bytes[32]):
+func create_application(vault_app_id: int, router_app_id: int, manager_address: bytes[32]):
     app_global_put(MANAGER_KEY, manager_address)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+    app_global_put(ROUTER_APP_ID_KEY, router_app_id)
     app_global_put(ORDER_FEE_RATE_KEY, 30)
     app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 15)
     app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 500_000_000)
 
-    # create_application(vault_app_id,manager_address)
-    log(ARC28Event("create_application(uint64,address)", itob(vault_app_id), manager_address))
+    # create_application(vault_app_id,router_app_id,manager_address)
+    log(ARC28Event("create_application(uint64,uint64,address)", itob(vault_app_id), itob(router_app_id), manager_address))
     return
 end
 
@@ -236,7 +238,6 @@ func create_entry():
     assert(Gtxn[app_creation_index].OnCompletion == NoOp)
     assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
     assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
-    assert(Gtxn[app_creation_index].ApplicationArgs[2] == itob(app_global_get(VAULT_APP_ID_KEY)))
 
     verify_approval_program(app_creation_index, app_global_get(LATEST_VERSION_KEY))
 
