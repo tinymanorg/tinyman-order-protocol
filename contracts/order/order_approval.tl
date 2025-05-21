@@ -101,14 +101,20 @@ end
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(registry_app_id: int, vault_app_id: int, router_app_id: int):
+func create_application(registry_app_id: int):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
 
     app_global_put(REGISTRY_APP_ID_KEY, registry_app_id)
     bytes registry_app_account_address 
     _, registry_app_account_address = app_params_get(AppAddress, registry_app_id)
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
+
+    int vault_app_id
+    _, vault_app_id = app_global_get_ex(registry_app_id, VAULT_APP_ID_KEY)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+
+    int router_app_id
+    _, router_app_id = app_global_get_ex(registry_app_id, ROUTER_APP_ID_KEY)
     app_global_put(ROUTER_APP_ID_KEY, router_app_id)
 
     app_global_put(VERSION_KEY, VERSION)
@@ -145,6 +151,17 @@ func post_update():
 
     # This will fail the update if the app is already at the same or higher version
     assert(VERSION > app_global_get(VERSION_KEY))
+
+    # Update app ids to match registry
+    int registry_app_id = app_global_put(REGISTRY_APP_ID_KEY)
+
+    int vault_app_id
+    _, vault_app_id = app_global_get_ex(registry_app_id, VAULT_APP_ID_KEY)
+    app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+
+    int router_app_id
+    _, router_app_id = app_global_get_ex(registry_app_id, ROUTER_APP_ID_KEY)
+    app_global_put(ROUTER_APP_ID_KEY, router_app_id)
 
     # any version specific 'migrations' can be done here in future versions
 
