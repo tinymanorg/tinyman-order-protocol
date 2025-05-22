@@ -58,6 +58,15 @@ deendorse_event = Event(
 )
 
 
+approve_version_event = Event(
+    name="approve_version",
+    args=[
+        abi.Argument(arg_type="uint64", name="version"),
+        abi.Argument(arg_type="byte[32]", name="version")
+    ]
+)
+
+
 trigger_order_fields = [
     abi.Argument(arg_type="uint64", name="asset_id"),
     abi.Argument(arg_type="uint64", name="amount"),
@@ -260,6 +269,7 @@ registry_events = [
     claim_fees_event,
     endorse_event,
     deendorse_event,
+    approve_version_event,
     entry_event,
     registry_update_ordering_application_event,
     registry_put_trigger_order_event,

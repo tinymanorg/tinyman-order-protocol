@@ -833,15 +833,23 @@ __func__approve_version:
     box_replace
     // boxset version_box.approval_hash
     
-    // tl:311: return
+    // tl:311: log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))
+    pushbytes 0x7d4292df                                    // SHA512_256("approve_version(uint64,byte[32])")[:4]
+    load 31                                                 // version
+    itob
+    load 30                                                 // approval_hash
+    concat
+    concat
+    log
+    // tl:312: return
     retsub
 
 
-// tl:315: func verify_approval_program(gtxn_index: int, version: int):
+// tl:316: func verify_approval_program(gtxn_index: int, version: int):
 __func__verify_approval_program:
     store 33                                                // version [int]
     store 34                                                // gtxn_index [int]
-    // tl:316: box<AppVersion> version_box = OpenBox(concat("v", itob(version))) [slot 35]
+    // tl:317: box<AppVersion> version_box = OpenBox(concat("v", itob(version))) [slot 35]
     pushbytes "v"
     load 33                                                 // version
     itob
@@ -850,14 +858,14 @@ __func__verify_approval_program:
     store 35                                                // box:version_box
     
     // 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
-    // tl:319: int last_page = Gtxn[gtxn_index].NumApprovalProgramPages [slot 36]
+    // tl:320: int last_page = Gtxn[gtxn_index].NumApprovalProgramPages [slot 36]
     load 34                                                 // gtxn_index
     gtxns NumApprovalProgramPages
     store 36                                                // last_page
-    // tl:320: bytes chunk_hashes = "" [slot 37]
+    // tl:321: bytes chunk_hashes = "" [slot 37]
     pushbytes ""
     store 37                                                // chunk_hashes
-    // tl:321: for i in 0:last_page:
+    // tl:322: for i in 0:last_page:
         pushint 0
         store 38                                            // i
         l3_for:
@@ -865,7 +873,7 @@ __func__verify_approval_program:
         load 36                                             // last_page
         ==
         bnz l3_end
-        // tl:322: chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
+        // tl:323: chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
         load 37                                             // chunk_hashes
         load 34                                             // gtxn_index
         load 38                                             // i
@@ -879,42 +887,42 @@ __func__verify_approval_program:
         store 38                                            // i
         b l3_for
         l3_end:
-    // tl:324: bytes approval_hash = sha256(chunk_hashes) [slot 39]
+    // tl:325: bytes approval_hash = sha256(chunk_hashes) [slot 39]
     load 37                                                 // chunk_hashes
     sha256
     store 39                                                // approval_hash
-    // tl:325: assert(approval_hash == version_box.approval_hash)
+    // tl:326: assert(approval_hash == version_box.approval_hash)
     load 39                                                 // approval_hash
     load 35; pushint 0; pushint 32; box_extract// version_box.approval_hash
     ==
     assert
-    // tl:326: return
+    // tl:327: return
     retsub
 
 
-// tl:330: func opt_in_to_asset_if_needed(asset_id: int) int:
+// tl:331: func opt_in_to_asset_if_needed(asset_id: int) int:
 __func__opt_in_to_asset_if_needed:
     store 40                                                // asset_id [int]
-    // tl:331: int is_opted_in [slot 41]
+    // tl:332: int is_opted_in [slot 41]
     
-    // tl:333: if asset_id:
+    // tl:334: if asset_id:
     load 40                                                 // asset_id
     bz l4_end
     // then:
-        // tl:334: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:335: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
         load 40                                             // asset_id
         asset_holding_get AssetBalance
         store 41                                            // is_opted_in
         pop                                                 // discarding value for _
         
-        // tl:336: if is_opted_in == 0:
+        // tl:337: if is_opted_in == 0:
         load 41                                             // is_opted_in
         pushint 0
         ==
         bz l5_end
         // then:
-            // tl:337: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            // tl:338: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
             load 40                                         // asset_id
             pushint 0
             global CurrentApplicationAddress
@@ -922,67 +930,67 @@ __func__opt_in_to_asset_if_needed:
             callsub __func__transfer
         l5_end:
     l4_end:
-    // tl:340: return !is_opted_in
+    // tl:341: return !is_opted_in
     load 41                                                 // is_opted_in
     !
     retsub
 
 
-// tl:344: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+// tl:345: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
 __func__transfer:
     store 42                                                // receiver [bytes]
     store 43                                                // sender [bytes]
     store 44                                                // amount [int]
     store 45                                                // asset_id [int]
-    // tl:345: if !asset_id:
+    // tl:346: if !asset_id:
     load 45                                                 // asset_id
     !
     bz l6_else
     // then:
-        // tl:346: inner_txn:
+        // tl:347: inner_txn:
         itxn_begin
-            // tl:347: TypeEnum: Pay
+            // tl:348: TypeEnum: Pay
             pushint 1                                       // Pay
             itxn_field TypeEnum
-            // tl:348: Sender: sender
+            // tl:349: Sender: sender
             load 43                                         // sender
             itxn_field Sender
-            // tl:349: Receiver: receiver
+            // tl:350: Receiver: receiver
             load 42                                         // receiver
             itxn_field Receiver
-            // tl:350: Amount: amount
+            // tl:351: Amount: amount
             load 44                                         // amount
             itxn_field Amount
-            // tl:351: Fee: 0
+            // tl:352: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
         b l6_end
     l6_else:
-    // tl:353: else:
-        // tl:354: inner_txn:
+    // tl:354: else:
+        // tl:355: inner_txn:
         itxn_begin
-            // tl:355: TypeEnum: Axfer
+            // tl:356: TypeEnum: Axfer
             pushint 4                                       // Axfer
             itxn_field TypeEnum
-            // tl:356: Sender: sender
+            // tl:357: Sender: sender
             load 43                                         // sender
             itxn_field Sender
-            // tl:357: AssetReceiver: receiver
+            // tl:358: AssetReceiver: receiver
             load 42                                         // receiver
             itxn_field AssetReceiver
-            // tl:358: AssetAmount: amount
+            // tl:359: AssetAmount: amount
             load 44                                         // amount
             itxn_field AssetAmount
-            // tl:359: XferAsset: asset_id
+            // tl:360: XferAsset: asset_id
             load 45                                         // asset_id
             itxn_field XferAsset
-            // tl:360: Fee: 0
+            // tl:361: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
     l6_end:
-    // tl:363: return
+    // tl:364: return
     retsub

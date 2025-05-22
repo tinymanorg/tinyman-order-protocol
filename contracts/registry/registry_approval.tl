@@ -308,6 +308,7 @@ func approve_version(version: int, approval_hash: bytes[32]):
     box<AppVersion> version_box = CreateBox(concat("v", itob(version)))
     version_box.approval_hash = approval_hash
 
+    log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))
     return
 end
 
