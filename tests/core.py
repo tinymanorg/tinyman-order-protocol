@@ -97,6 +97,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
