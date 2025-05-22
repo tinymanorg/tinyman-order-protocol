@@ -86,6 +86,15 @@ recurring_order_fields = [
 ]
 
 
+registry_update_ordering_application_event = Event(
+    name="update_ordering_application",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="version"),
+    ]
+)
+
+
 registry_put_trigger_order_event = Event(
     name="put_trigger_order",
     args=[
@@ -141,6 +150,15 @@ registry_cancel_recurring_order_event = Event(
 
 
 # Order Events
+update_application_event = Event(
+    name="update_application",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="version"),
+    ]
+)
+
+
 trigger_order_event = Event(
     name="trigger_order",
     args=[
@@ -243,6 +261,7 @@ registry_events = [
     endorse_event,
     deendorse_event,
     entry_event,
+    registry_update_ordering_application_event,
     registry_put_trigger_order_event,
     registry_update_trigger_order_event,
     registry_cancel_trigger_order_event,
@@ -253,6 +272,7 @@ registry_events = [
 
 
 ordering_events = [
+    update_application_event,
     trigger_order_event,
     put_trigger_order_event,
     cancel_trigger_order_event,

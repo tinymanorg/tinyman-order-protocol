@@ -458,6 +458,10 @@ class OrderingClient(BaseClient):
                 app_args=[b"update_application", version],
                 approval_program=approval_program,
                 clear_program=order_clear_state_program.bytecode,
+                foreign_apps=[self.registry_app_id],
+                boxes=[
+                    (self.registry_app_id, self.get_registry_entry_box_name(self.user_address))
+                ]
             ),
             transaction.ApplicationNoOpTxn(
                 sender=self.user_address,
@@ -474,7 +478,7 @@ class OrderingClient(BaseClient):
             ),
         ]
 
-        return self._submit(transactions)
+        return self._submit(transactions, additional_fees=1)
 
     def registry_user_opt_in(self):
         sp = self.get_suggested_params()
