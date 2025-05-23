@@ -108,6 +108,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         block = self.ledger.last_block
         block_txns = block[b'txns']
         update_application_txn = block_txns[0]
+        verify_update_txn = block_txns[1]
 
         events = decode_logs(update_application_txn[b'dt'][b'lg'], ordering_events)
         update_application_event = events[0]
@@ -115,23 +116,14 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.assertEqual(update_application_event["user_address"], self.user_address)
         self.assertEqual(update_application_event["version"], 2)
 
-        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
-
-        # Inner Transaction Checks
-        inner_txns = update_application_txn[b'dt'][b'itx']
-
-        self.assertEqual(len(inner_txns), 1)
-        self.assertEqual(inner_txns[0][b'txn'][b'type'], b'appl')
-        self.assertEqual(inner_txns[0][b'txn'][b'apid'], self.registry_app_id)
-        self.assertEqual(inner_txns[0][b'txn'][b'apaa'][0], b'emit_event')
-        self.assertEqual(inner_txns[0][b'txn'][b'apaa'][1], b'update_ordering_application')
-
-        events = decode_logs(inner_txns[0][b'dt'][b'lg'], registry_events)
+        events = decode_logs(verify_update_txn[b'dt'][b'lg'], registry_events)
         emited_event = events[0]
 
         self.assertEqual(emited_event['event_name'], 'update_ordering_application')
         self.assertEqual(emited_event['order_app_id'], self.app_id)
         self.assertEqual(emited_event['version'], 2)
+
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
 
 
 class PutOrderTests(OrderProtocolBaseTestCase):

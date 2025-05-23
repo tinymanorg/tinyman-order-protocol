@@ -260,9 +260,7 @@ func emit_event(event_name: bytes, user_address: bytes, data: bytes):
     assert(app_id == entry.app_id)
 
     bytes event
-    if event_name == "update_ordering_application":
-        event = ARC28Event("update_ordering_application(uint64,uint64)", itob(app_id), data)
-    elif event_name == "put_trigger_order":
+    if event_name == "put_trigger_order":
         event = ARC28Event("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
     elif event_name == "update_trigger_order":
         event = ARC28Event("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
@@ -291,6 +289,7 @@ func verify_update(version: int):
 
     verify_approval_program(app_update_index, version)
 
+    log(ARC28Event("update_ordering_application(uint64,uint64)", itob(Gtxn[app_update_index].ApplicationID), itob(version)))
     return
 end
 
