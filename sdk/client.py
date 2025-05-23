@@ -10,7 +10,7 @@ from tinyman.utils import TransactionGroup, int_to_bytes
 
 from sdk.base_client import BaseClient
 from sdk.constants import *
-from sdk.structs import TriggerOrder, Entry
+from sdk.structs import AppVersion, TriggerOrder, Entry
 from sdk.utils import int_array
 
 # TODO: Later change these dependencies with the hardcoded ones.
@@ -648,6 +648,37 @@ class RegistryClient(BaseClient):
                 index=self.app_id,
                 app_args=["deendorse", decode_address(user_address)],
                 accounts=[user_address]
+            )
+        ]
+
+        return self._submit(transactions)
+
+    def get_app_version_box_name(self, version: int):
+        return b"v" + int_to_bytes(version)
+
+    def approve_version(self, version: int, approval_hash):
+        sp = self.get_suggested_params()
+
+        app_version_box_name = self.get_app_version_box_name(version)
+
+        new_boxes = {}
+        if not self.box_exists(app_version_box_name, self.app_id):
+            new_boxes[app_version_box_name] = AppVersion
+
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.application_address,
+                amt=self.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.ApplicationCallTxn(
+                sender=self.user_address,
+                sp=sp,
+                on_complete=transaction.OnComplete.NoOpOC,
+                index=self.app_id,
+                app_args=[b"approve_version", version, approval_hash],
+                boxes=[(0, app_version_box_name)]
             )
         ]
 

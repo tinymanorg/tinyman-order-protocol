@@ -304,7 +304,7 @@ func approve_version(version: int, approval_hash: bytes[32]):
     app_global_put(LATEST_VERSION_KEY, version)
 
     # approval_hash must be computed using the same algorithm as used in verify_update
-    box<AppVersion> version_box = CreateBox(concat("v", itob(version)))
+    box<AppVersion> version_box = OpenOrCreateBox(concat("v", itob(version)))
     version_box.approval_hash = approval_hash
 
     log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))

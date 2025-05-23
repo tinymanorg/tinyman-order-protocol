@@ -62,7 +62,7 @@ approve_version_event = Event(
     name="approve_version",
     args=[
         abi.Argument(arg_type="uint64", name="version"),
-        abi.Argument(arg_type="byte[32]", name="version")
+        abi.Argument(arg_type="byte[32]", name="approval_hash")
     ]
 )
 

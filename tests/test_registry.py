@@ -341,3 +341,25 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
 
         user_local_state = self.ledger.get_local_state(self.user_address, self.registry_app_id)
         self.assertTrue(IS_ENDORSED_KEY not in user_local_state)
+
+    def test_approve_version(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+
+        # Approve Version
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.approve_version(1, approval_hash)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        approve_version_txn = block_txns[1]
+
+        events = decode_logs(approve_version_txn[b'dt'][b'lg'], registry_events)
+        approve_version_event = events[0]
+
+        self.assertEqual(approve_version_event['version'], 1)
+        self.assertEqual(approve_version_event['approval_hash'], approval_hash)
