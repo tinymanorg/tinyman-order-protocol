@@ -81,7 +81,36 @@ class OrderingClient(BaseClient):
         ]
 
         return self._submit(transactions, additional_fees=0)
-    
+
+    def update_ordering_app(self, version, approval_program):
+        sp = self.get_suggested_params()
+
+        transactions = [
+            transaction.ApplicationUpdateTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.app_id,
+                app_args=[b"update_application", version],
+                approval_program=approval_program,
+                clear_program=order_clear_state_program.bytecode
+            ),
+            transaction.ApplicationNoOpTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.registry_app_id,
+                app_args=[b"verify_update", version],
+                boxes=[(self.registry_app_id, b"v" + version.to_bytes(8, "big"))]
+            ),
+            transaction.ApplicationNoOpTxn(
+                sender=self.user_address,
+                sp=sp,
+                index=self.app_id,
+                app_args=[b"post_update"],
+            ),
+        ]
+
+        return self._submit(transactions)
+
     def prepare_asset_opt_in_txn(self, asset_ids: List[int], sp):
         asset_ids = int_array(asset_ids, 8, 0)
         transactions = [
@@ -446,35 +475,6 @@ class OrderingClient(BaseClient):
             ))
 
         return self._submit(transactions, additional_fees=num_inner_txns + extra_txns)
-
-    def update_ordering_app(self, version, approval_program):
-        sp = self.get_suggested_params()
-
-        transactions = [
-            transaction.ApplicationUpdateTxn(
-                sender=self.user_address,
-                sp=sp,
-                index=self.app_id,
-                app_args=[b"update_application", version],
-                approval_program=approval_program,
-                clear_program=order_clear_state_program.bytecode,
-            ),
-            transaction.ApplicationNoOpTxn(
-                sender=self.user_address,
-                sp=sp,
-                index=self.registry_app_id,
-                app_args=[b"verify_update", version],
-                boxes=[(self.registry_app_id, b"v" + version.to_bytes(8, "big"))]
-            ),
-            transaction.ApplicationNoOpTxn(
-                sender=self.user_address,
-                sp=sp,
-                index=self.app_id,
-                app_args=[b"post_update"],
-            ),
-        ]
-
-        return self._submit(transactions)
 
     def registry_user_opt_in(self):
         sp = self.get_suggested_params()

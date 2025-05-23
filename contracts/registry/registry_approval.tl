@@ -289,6 +289,7 @@ func verify_update(version: int):
 
     verify_approval_program(app_update_index, version)
 
+    log(ARC28Event("update_ordering_application(uint64,uint64)", itob(Gtxn[app_update_index].ApplicationID), itob(version)))
     return
 end
 
@@ -306,6 +307,7 @@ func approve_version(version: int, approval_hash: bytes[32]):
     box<AppVersion> version_box = CreateBox(concat("v", itob(version)))
     version_box.approval_hash = approval_hash
 
+    log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))
     return
 end
 

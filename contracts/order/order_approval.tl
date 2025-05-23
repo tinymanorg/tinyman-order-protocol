@@ -139,6 +139,8 @@ func update_application(version: int):
     # Gtxn +2 must be a call to post_update on this app
     assert(Gtxn[+2].ApplicationID == Global.CurrentApplicationID)
     assert(Gtxn[+2].ApplicationArgs[0] == "post_update")
+
+    log(ARC28Event("update_application(address,uint64)", Txn.Sender, itob(version)))
     return
 end
 

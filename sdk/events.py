@@ -58,6 +58,15 @@ deendorse_event = Event(
 )
 
 
+approve_version_event = Event(
+    name="approve_version",
+    args=[
+        abi.Argument(arg_type="uint64", name="version"),
+        abi.Argument(arg_type="byte[32]", name="version")
+    ]
+)
+
+
 trigger_order_fields = [
     abi.Argument(arg_type="uint64", name="asset_id"),
     abi.Argument(arg_type="uint64", name="amount"),
@@ -84,6 +93,15 @@ recurring_order_fields = [
     abi.Argument(arg_type="uint64", name="last_fill_timestamp"),
     abi.Argument(arg_type="uint64", name="creation_timestamp")
 ]
+
+
+registry_update_ordering_application_event = Event(
+    name="update_ordering_application",
+    args=[
+        abi.Argument(arg_type="uint64", name="order_app_id"),
+        abi.Argument(arg_type="uint64", name="version"),
+    ]
+)
 
 
 registry_put_trigger_order_event = Event(
@@ -141,6 +159,15 @@ registry_cancel_recurring_order_event = Event(
 
 
 # Order Events
+update_application_event = Event(
+    name="update_application",
+    args=[
+        abi.Argument(arg_type="address", name="user_address"),
+        abi.Argument(arg_type="uint64", name="version"),
+    ]
+)
+
+
 trigger_order_event = Event(
     name="trigger_order",
     args=[
@@ -242,7 +269,9 @@ registry_events = [
     claim_fees_event,
     endorse_event,
     deendorse_event,
+    approve_version_event,
     entry_event,
+    registry_update_ordering_application_event,
     registry_put_trigger_order_event,
     registry_update_trigger_order_event,
     registry_cancel_trigger_order_event,
@@ -253,6 +282,7 @@ registry_events = [
 
 
 ordering_events = [
+    update_application_event,
     trigger_order_event,
     put_trigger_order_event,
     cancel_trigger_order_event,

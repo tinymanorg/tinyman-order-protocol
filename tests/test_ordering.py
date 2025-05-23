@@ -79,6 +79,8 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
         # Create order app for user.
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
@@ -99,7 +101,27 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.ledger.set_box(self.registry_app_id, key, struct._data)
         self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
+        # Update Ordering App
+        self.ledger.next_timestamp = now + DAY
         self.ordering_client.update_ordering_app(version, update_bytecode)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        update_application_txn = block_txns[0]
+        verify_update_txn = block_txns[1]
+
+        events = decode_logs(update_application_txn[b'dt'][b'lg'], ordering_events)
+        update_application_event = events[0]
+
+        self.assertEqual(update_application_event["user_address"], self.user_address)
+        self.assertEqual(update_application_event["version"], 2)
+
+        events = decode_logs(verify_update_txn[b'dt'][b'lg'], registry_events)
+        emited_event = events[0]
+
+        self.assertEqual(emited_event['event_name'], 'update_ordering_application')
+        self.assertEqual(emited_event['order_app_id'], self.app_id)
+        self.assertEqual(emited_event['version'], 2)
 
         self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
 
