@@ -80,7 +80,7 @@ const int INTERVAL_TOLERANCE = 30
 # Versioning
 
 # Update this value by one with each new version
-const int VERSION = 1
+const int VERSION = 2
 
 
 router:
