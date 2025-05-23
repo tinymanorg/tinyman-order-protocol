@@ -49,7 +49,7 @@
 // Versioning
 
 // Update this value by one with each new version
-#define VERSION 1
+#define VERSION 2
 
 
 // tl:86: router:
@@ -198,7 +198,7 @@ __func__create_application:
     
     // tl:120: app_global_put(VERSION_KEY, VERSION)
     pushbytes VERSION_KEY                                   // "version"
-    pushint VERSION                                         // 1
+    pushint VERSION                                         // 2
     app_global_put
     
     // create_application(user_address,registry_app_id,vault_app_id)
@@ -304,7 +304,7 @@ __func__post_update:
     
     // This will fail the update if the app is already at the same or higher version
     // tl:155: assert(VERSION > app_global_get(VERSION_KEY))
-    pushint VERSION                                         // 1
+    pushint VERSION                                         // 2
     pushbytes VERSION_KEY                                   // "version"
     app_global_get
     >
@@ -345,11 +345,11 @@ __func__post_update:
     // Always update the version number in global state
     // tl:171: app_global_put(VERSION_KEY, VERSION)
     pushbytes VERSION_KEY                                   // "version"
-    pushint VERSION                                         // 1
+    pushint VERSION                                         // 2
     app_global_put
     // tl:172: log(ARC28Event("post_update(uint64)", itob(VERSION)))
     pushbytes 0xfca63cfe                                    // SHA512_256("post_update(uint64)")[:4]
-    pushint VERSION                                         // 1
+    pushint VERSION                                         // 2
     itob
     concat
     log
@@ -1731,9 +1731,23 @@ __func__do_router_swap:
     app_params_get AppAddress
     pop                                                     // discarding value for _
     store 94                                                // router_app_address
-    // tl:573: inner_group:
+    // tl:573: int output_asset_id = route[swaps] [slot 95]
+    load 91                                                 // route
+    pushint 8
+    load 89                                                 // swaps
+    *
+    pushint 8
+    extract
+    btoi
+    store 95                                                // output_asset_id
+    // tl:574: int initial_balance = get_balance(Global.CurrentApplicationAddress, output_asset_id) [slot 96]
+    global CurrentApplicationAddress
+    load 95                                                 // output_asset_id
+    callsub __func__get_balance
+    store 96                                                // initial_balance
+    // tl:575: inner_group:
     callsub _itxn_group_begin
-        // tl:574: transfer(route[0], input_amount, Global.CurrentApplicationAddress, router_app_address)
+        // tl:576: transfer(route[0], input_amount, Global.CurrentApplicationAddress, router_app_address)
         load 91                                             // route
         pushint 8
         pushint 0
@@ -1745,36 +1759,36 @@ __func__do_router_swap:
         global CurrentApplicationAddress
         load 94                                             // router_app_address
         callsub __func__transfer
-        // tl:575: inner_txn:
+        // tl:577: inner_txn:
         callsub _itxn_begin
-            // tl:576: TypeEnum: Appl
+            // tl:578: TypeEnum: Appl
             pushint 6                                       // Appl
             itxn_field TypeEnum
-            // tl:577: Fee: 0
+            // tl:579: Fee: 0
             pushint 0
             itxn_field Fee
-            // tl:578: ApplicationID: app_global_get(ROUTER_APP_ID_KEY)
+            // tl:580: ApplicationID: app_global_get(ROUTER_APP_ID_KEY)
             pushbytes ROUTER_APP_ID_KEY                     // "router_app_id"
             app_global_get
             itxn_field ApplicationID
-            // tl:579: ApplicationArgs[0]: "swap"
+            // tl:581: ApplicationArgs[0]: "swap"
             pushbytes "swap"
             itxn_field ApplicationArgs
-            // tl:580: ApplicationArgs[1]: itob(input_amount)
+            // tl:582: ApplicationArgs[1]: itob(input_amount)
             load 93                                         // input_amount
             itob
             itxn_field ApplicationArgs
-            // tl:581: ApplicationArgs[2]: itob(output_amount)
+            // tl:583: ApplicationArgs[2]: itob(output_amount)
             load 92                                         // output_amount
             itob
             itxn_field ApplicationArgs
-            // tl:582: ApplicationArgs[3]: route
+            // tl:584: ApplicationArgs[3]: route
             load 91                                         // route
             itxn_field ApplicationArgs
-            // tl:583: ApplicationArgs[4]: pools
+            // tl:585: ApplicationArgs[4]: pools
             load 90                                         // pools
             itxn_field ApplicationArgs
-            // tl:584: ApplicationArgs[5]: itob(swaps)
+            // tl:586: ApplicationArgs[5]: itob(swaps)
             load 89                                         // swaps
             itob
             itxn_field ApplicationArgs
@@ -1782,463 +1796,499 @@ __func__do_router_swap:
         // end inner_txn
         callsub _itxn_group_submit
     // end inner_group
-    // tl:587: int received_amount = extract_uint64(Itxn.LastLog, 28) [slot 95]
-    itxn LastLog
-    pushint 28
-    extract_uint64
-    store 95                                                // received_amount
-    // tl:588: return received_amount
-    load 95                                                 // received_amount
+    // tl:589: int received_amount = get_balance(Global.CurrentApplicationAddress, output_asset_id) - initial_balance [slot 97]
+    global CurrentApplicationAddress
+    load 95                                                 // output_asset_id
+    callsub __func__get_balance
+    load 96                                                 // initial_balance
+    -
+    store 97                                                // received_amount
+    // tl:590: return received_amount
+    load 97                                                 // received_amount
     retsub
 
 
-// tl:592: func check_is_endorsed(user_address: bytes[32]):
+// tl:594: func check_is_endorsed(user_address: bytes[32]):
 __func__check_is_endorsed:
-    store 96                                                // user_address [bytes[32]]
-    // tl:593: int exists [slot 97]
-    // tl:594: bytes is_endorsed_bytes [slot 98]
-    // tl:595: int is_endorsed [slot 99]
+    store 98                                                // user_address [bytes[32]]
+    // tl:595: int exists [slot 99]
+    // tl:596: bytes is_endorsed_bytes [slot 100]
+    // tl:597: int is_endorsed [slot 101]
     
-    // tl:597: exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
-    load 96                                                 // user_address
+    // tl:599: exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
+    load 98                                                 // user_address
     pushbytes REGISTRY_APP_ID_KEY                           // "registry_app_id"
     app_global_get
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     app_local_get_ex
-    store 97                                                // exists
-    store 98                                                // is_endorsed_bytes
+    store 99                                                // exists
+    store 100                                               // is_endorsed_bytes
     
-    // tl:599: assert(exists)
-    load 97                                                 // exists
+    // tl:601: assert(exists)
+    load 99                                                 // exists
     assert
     
-    // tl:601: is_endorsed = UncheckedCast(is_endorsed_bytes, int)
-    load 98                                                 // is_endorsed_bytes
-    store 99                                                // is_endorsed
-    // tl:602: assert(is_endorsed)
-    load 99                                                 // is_endorsed
+    // tl:603: is_endorsed = UncheckedCast(is_endorsed_bytes, int)
+    load 100                                                // is_endorsed_bytes
+    store 101                                               // is_endorsed
+    // tl:604: assert(is_endorsed)
+    load 101                                                // is_endorsed
     assert
     
-    // tl:604: return
+    // tl:606: return
     retsub
 
 
-// tl:608: func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
+// tl:610: func calculate_minimum_amount(amount: int, target_amount: int, fill_amount: int) int:
 __func__calculate_minimum_amount:
-    store 100                                               // fill_amount [int]
-    store 101                                               // target_amount [int]
-    store 102                                               // amount [int]
-    // tl:609: bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount) [slot 103]
-    load 101                                                // target_amount
+    store 102                                               // fill_amount [int]
+    store 103                                               // target_amount [int]
+    store 104                                               // amount [int]
+    // tl:611: bytes target_rate = (itob(target_amount) b* itob(RATE_SCALER)) b/ itob(amount) [slot 105]
+    load 103                                                // target_amount
     itob
     pushint RATE_SCALER                                     // 18446744073709551615
     itob
     b*
-    load 102                                                // amount
+    load 104                                                // amount
     itob
     b/
-    store 103                                               // target_rate
-    // tl:610: int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER)) [slot 104]
-    load 100                                                // fill_amount
+    store 105                                               // target_rate
+    // tl:612: int minimum_amount = btoi((itob(fill_amount) b* target_rate) b/ itob(RATE_SCALER)) [slot 106]
+    load 102                                                // fill_amount
     itob
-    load 103                                                // target_rate
+    load 105                                                // target_rate
     b*
     pushint RATE_SCALER                                     // 18446744073709551615
     itob
     b/
     btoi
-    store 104                                               // minimum_amount
-    // tl:611: return minimum_amount
-    load 104                                                // minimum_amount
+    store 106                                               // minimum_amount
+    // tl:613: return minimum_amount
+    load 106                                                // minimum_amount
     retsub
 
 
-// tl:615: func calculate_fee_amount(target_amount: int, fee_rate: int) int:
+// tl:617: func calculate_fee_amount(target_amount: int, fee_rate: int) int:
 __func__calculate_fee_amount:
-    store 105                                               // fee_rate [int]
-    store 106                                               // target_amount [int]
-    // tl:616: int fee_amount = (target_amount * fee_rate) / 10000 [slot 107]
-    load 106                                                // target_amount
-    load 105                                                // fee_rate
+    store 107                                               // fee_rate [int]
+    store 108                                               // target_amount [int]
+    // tl:618: int fee_amount = (target_amount * fee_rate) / 10000 [slot 109]
+    load 108                                                // target_amount
+    load 107                                                // fee_rate
     *
     pushint 10000
     /
-    store 107                                               // fee_amount
-    // tl:617: return fee_amount
-    load 107                                                // fee_amount
+    store 109                                               // fee_amount
+    // tl:619: return fee_amount
+    load 109                                                // fee_amount
     retsub
 
 
-// tl:621: func get_fee_rate() int:
+// tl:623: func get_fee_rate() int:
 __func__get_fee_rate:
-    // tl:622: bytes threshold_bytes [slot 108]
-    // tl:623: bytes fee_rate_bytes [slot 109]
-    // tl:624: int fee_rate [slot 110]
+    // tl:624: bytes threshold_bytes [slot 110]
+    // tl:625: bytes fee_rate_bytes [slot 111]
+    // tl:626: int fee_rate [slot 112]
     
-    // tl:626: int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes)) [slot 111]
+    // tl:628: int account_voting_power = get_account_voting_power(UncheckedCast(app_global_get(USER_ADDRESS_KEY), bytes)) [slot 113]
     pushbytes USER_ADDRESS_KEY                              // "user_address"
     app_global_get
     callsub __func__get_account_voting_power
-    store 111                                               // account_voting_power
-    // tl:627: _, threshold_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD)
+    store 113                                               // account_voting_power
+    // tl:629: _, threshold_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_FEE_RATE_POWER_THRESHOLD)
     pushbytes REGISTRY_APP_ID_KEY                           // "registry_app_id"
     app_global_get
     pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
     app_global_get_ex
     pop                                                     // discarding value for _
-    store 108                                               // threshold_bytes
-    // tl:628: int fee_rate_power_threshold = UncheckedCast(threshold_bytes, int) [slot 112]
-    load 108                                                // threshold_bytes
-    store 112                                               // fee_rate_power_threshold
+    store 110                                               // threshold_bytes
+    // tl:630: int fee_rate_power_threshold = UncheckedCast(threshold_bytes, int) [slot 114]
+    load 110                                                // threshold_bytes
+    store 114                                               // fee_rate_power_threshold
     
-    // tl:630: if account_voting_power > fee_rate_power_threshold:
-    load 111                                                // account_voting_power
-    load 112                                                // fee_rate_power_threshold
+    // tl:632: if account_voting_power > fee_rate_power_threshold:
+    load 113                                                // account_voting_power
+    load 114                                                // fee_rate_power_threshold
     >
     bz l11_else
     // then:
-        // tl:631: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY)
+        // tl:633: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), GOVERNOR_ORDER_FEE_RATE_KEY)
         pushbytes REGISTRY_APP_ID_KEY                       // "registry_app_id"
         app_global_get
         pushbytes GOVERNOR_ORDER_FEE_RATE_KEY               // "governor_order_fee_rate"
         app_global_get_ex
         pop                                                 // discarding value for _
-        store 109                                           // fee_rate_bytes
+        store 111                                           // fee_rate_bytes
         b l11_end
     l11_else:
-    // tl:632: else:
-        // tl:633: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY)
+    // tl:634: else:
+        // tl:635: _, fee_rate_bytes = app_global_get_ex(app_global_get(REGISTRY_APP_ID_KEY), ORDER_FEE_RATE_KEY)
         pushbytes REGISTRY_APP_ID_KEY                       // "registry_app_id"
         app_global_get
         pushbytes ORDER_FEE_RATE_KEY                        // "order_fee_rate"
         app_global_get_ex
         pop                                                 // discarding value for _
-        store 109                                           // fee_rate_bytes
+        store 111                                           // fee_rate_bytes
     l11_end:
     
-    // tl:636: fee_rate = UncheckedCast(fee_rate_bytes, int)
-    load 109                                                // fee_rate_bytes
-    store 110                                               // fee_rate
-    // tl:637: return fee_rate
-    load 110                                                // fee_rate
+    // tl:638: fee_rate = UncheckedCast(fee_rate_bytes, int)
+    load 111                                                // fee_rate_bytes
+    store 112                                               // fee_rate
+    // tl:639: return fee_rate
+    load 112                                                // fee_rate
     retsub
 
 
-// tl:641: func get_account_voting_power(address: bytes) int:
+// tl:643: func get_account_voting_power(address: bytes) int:
 __func__get_account_voting_power:
-    store 113                                               // address [bytes]
-    // tl:642: inner_txn:
+    store 115                                               // address [bytes]
+    // tl:644: inner_txn:
     callsub _itxn_begin
-        // tl:643: TypeEnum: Appl
+        // tl:645: TypeEnum: Appl
         pushint 6                                           // Appl
         itxn_field TypeEnum
-        // tl:644: ApplicationID: app_global_get(VAULT_APP_ID_KEY)
+        // tl:646: ApplicationID: app_global_get(VAULT_APP_ID_KEY)
         pushbytes VAULT_APP_ID_KEY                          // "vault_app_id"
         app_global_get
         itxn_field ApplicationID
-        // tl:645: ApplicationArgs[0]: "get_tiny_power_of"
+        // tl:647: ApplicationArgs[0]: "get_tiny_power_of"
         pushbytes "get_tiny_power_of"
         itxn_field ApplicationArgs
-        // tl:646: ApplicationArgs[1]: address
-        load 113                                            // address
+        // tl:648: ApplicationArgs[1]: address
+        load 115                                            // address
         itxn_field ApplicationArgs
-        // tl:647: Fee: 0
+        // tl:649: Fee: 0
         pushint 0
         itxn_field Fee
     callsub _itxn_submit
     // end inner_txn
-    // tl:649: int voting_power = extract_uint64(Itxn.LastLog, 4) [slot 114]
+    // tl:651: int voting_power = extract_uint64(Itxn.LastLog, 4) [slot 116]
     itxn LastLog
     pushint 4
     extract_uint64
-    store 114                                               // voting_power
-    // tl:650: return voting_power
-    load 114                                                // voting_power
+    store 116                                               // voting_power
+    // tl:652: return voting_power
+    load 116                                                // voting_power
     retsub
 
 
-// tl:654: func opt_in_to_asset_if_needed(asset_id: int):
+// tl:656: func opt_in_to_asset_if_needed(asset_id: int):
 __func__opt_in_to_asset_if_needed:
-    store 115                                               // asset_id [int]
-    // tl:655: if asset_id:
-    load 115                                                // asset_id
+    store 117                                               // asset_id [int]
+    // tl:657: if asset_id:
+    load 117                                                // asset_id
     bz l12_end
     // then:
-        // tl:656: int is_opted_in [slot 116]
-        // tl:657: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:658: int is_opted_in [slot 118]
+        // tl:659: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
-        load 115                                            // asset_id
+        load 117                                            // asset_id
         asset_holding_get AssetBalance
-        store 116                                           // is_opted_in
+        store 118                                           // is_opted_in
         pop                                                 // discarding value for _
         
-        // tl:659: if is_opted_in == 0:
-        load 116                                            // is_opted_in
+        // tl:661: if is_opted_in == 0:
+        load 118                                            // is_opted_in
         pushint 0
         ==
         bz l13_end
         // then:
-            // tl:660: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
-            load 115                                        // asset_id
+            // tl:662: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            load 117                                        // asset_id
             pushint 0
             global CurrentApplicationAddress
             global CurrentApplicationAddress
             callsub __func__transfer
         l13_end:
     l12_end:
-    // tl:663: return
+    // tl:665: return
     retsub
 
 
-// tl:667: func check_received_asset(txn_index: int, receiver: bytes, asset_id: int, amount: int):
+// tl:669: func check_received_asset(txn_index: int, receiver: bytes, asset_id: int, amount: int):
 __func__check_received_asset:
-    store 117                                               // amount [int]
-    store 118                                               // asset_id [int]
-    store 119                                               // receiver [bytes]
-    store 120                                               // txn_index [int]
-    // tl:668: if !asset_id:
-    load 118                                                // asset_id
+    store 119                                               // amount [int]
+    store 120                                               // asset_id [int]
+    store 121                                               // receiver [bytes]
+    store 122                                               // txn_index [int]
+    // tl:670: if !asset_id:
+    load 120                                                // asset_id
     !
     bz l14_else
     // then:
-        // tl:669: assert(Gtxn[txn_index].TypeEnum == Pay)
-        load 120                                            // txn_index
+        // tl:671: assert(Gtxn[txn_index].TypeEnum == Pay)
+        load 122                                            // txn_index
         gtxns TypeEnum
         pushint 1                                           // Pay
         ==
         assert
-        // tl:670: assert(Gtxn[txn_index].Receiver == receiver)
-        load 120                                            // txn_index
+        // tl:672: assert(Gtxn[txn_index].Receiver == receiver)
+        load 122                                            // txn_index
         gtxns Receiver
-        load 119                                            // receiver
+        load 121                                            // receiver
         ==
         assert
-        // tl:671: assert(Gtxn[txn_index].Amount == amount)
-        load 120                                            // txn_index
+        // tl:673: assert(Gtxn[txn_index].Amount == amount)
+        load 122                                            // txn_index
         gtxns Amount
-        load 117                                            // amount
+        load 119                                            // amount
         ==
         assert
         b l14_end
     l14_else:
-    // tl:672: else:
-        // tl:673: assert(Gtxn[txn_index].TypeEnum == Axfer)
-        load 120                                            // txn_index
+    // tl:674: else:
+        // tl:675: assert(Gtxn[txn_index].TypeEnum == Axfer)
+        load 122                                            // txn_index
         gtxns TypeEnum
         pushint 4                                           // Axfer
         ==
         assert
-        // tl:674: assert(Gtxn[txn_index].AssetReceiver == receiver)
-        load 120                                            // txn_index
+        // tl:676: assert(Gtxn[txn_index].AssetReceiver == receiver)
+        load 122                                            // txn_index
         gtxns AssetReceiver
-        load 119                                            // receiver
+        load 121                                            // receiver
         ==
         assert
-        // tl:675: assert(Gtxn[txn_index].XferAsset == asset_id)
-        load 120                                            // txn_index
+        // tl:677: assert(Gtxn[txn_index].XferAsset == asset_id)
+        load 122                                            // txn_index
         gtxns XferAsset
-        load 118                                            // asset_id
+        load 120                                            // asset_id
         ==
         assert
-        // tl:676: assert(Gtxn[txn_index].AssetAmount == amount)
-        load 120                                            // txn_index
+        // tl:678: assert(Gtxn[txn_index].AssetAmount == amount)
+        load 122                                            // txn_index
         gtxns AssetAmount
-        load 117                                            // amount
+        load 119                                            // amount
         ==
         assert
     l14_end:
-    // tl:678: return
+    // tl:680: return
     retsub
 
 
-// tl:682: func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int) int:
+// tl:684: func check_received_target_asset(txn_index: int, receiver: bytes, asset_id: int, minimum_amount: int) int:
 __func__check_received_target_asset:
-    store 121                                               // minimum_amount [int]
-    store 122                                               // asset_id [int]
-    store 123                                               // receiver [bytes]
-    store 124                                               // txn_index [int]
-    // tl:683: int received_amount [slot 125]
-    // tl:684: if !asset_id:
-    load 122                                                // asset_id
+    store 123                                               // minimum_amount [int]
+    store 124                                               // asset_id [int]
+    store 125                                               // receiver [bytes]
+    store 126                                               // txn_index [int]
+    // tl:685: int received_amount [slot 127]
+    // tl:686: if !asset_id:
+    load 124                                                // asset_id
     !
     bz l15_else
     // then:
-        // tl:685: assert(Gtxn[txn_index].TypeEnum == Pay)
-        load 124                                            // txn_index
+        // tl:687: assert(Gtxn[txn_index].TypeEnum == Pay)
+        load 126                                            // txn_index
         gtxns TypeEnum
         pushint 1                                           // Pay
         ==
         assert
-        // tl:686: assert(Gtxn[txn_index].Receiver == receiver)
-        load 124                                            // txn_index
+        // tl:688: assert(Gtxn[txn_index].Receiver == receiver)
+        load 126                                            // txn_index
         gtxns Receiver
-        load 123                                            // receiver
+        load 125                                            // receiver
         ==
         assert
-        // tl:687: assert(Gtxn[txn_index].Amount >= minimum_amount)
-        load 124                                            // txn_index
+        // tl:689: assert(Gtxn[txn_index].Amount >= minimum_amount)
+        load 126                                            // txn_index
         gtxns Amount
-        load 121                                            // minimum_amount
+        load 123                                            // minimum_amount
         >=
         assert
         
-        // tl:689: received_amount = Gtxn[txn_index].Amount
-        load 124                                            // txn_index
+        // tl:691: received_amount = Gtxn[txn_index].Amount
+        load 126                                            // txn_index
         gtxns Amount
-        store 125                                           // received_amount
+        store 127                                           // received_amount
         b l15_end
     l15_else:
-    // tl:690: else:
-        // tl:691: assert(Gtxn[txn_index].TypeEnum == Axfer)
-        load 124                                            // txn_index
+    // tl:692: else:
+        // tl:693: assert(Gtxn[txn_index].TypeEnum == Axfer)
+        load 126                                            // txn_index
         gtxns TypeEnum
         pushint 4                                           // Axfer
         ==
         assert
-        // tl:692: assert(Gtxn[txn_index].AssetReceiver == receiver)
-        load 124                                            // txn_index
+        // tl:694: assert(Gtxn[txn_index].AssetReceiver == receiver)
+        load 126                                            // txn_index
         gtxns AssetReceiver
-        load 123                                            // receiver
+        load 125                                            // receiver
         ==
         assert
-        // tl:693: assert(Gtxn[txn_index].XferAsset == asset_id)
-        load 124                                            // txn_index
+        // tl:695: assert(Gtxn[txn_index].XferAsset == asset_id)
+        load 126                                            // txn_index
         gtxns XferAsset
-        load 122                                            // asset_id
+        load 124                                            // asset_id
         ==
         assert
-        // tl:694: assert(Gtxn[txn_index].AssetAmount >= minimum_amount)
-        load 124                                            // txn_index
+        // tl:696: assert(Gtxn[txn_index].AssetAmount >= minimum_amount)
+        load 126                                            // txn_index
         gtxns AssetAmount
-        load 121                                            // minimum_amount
+        load 123                                            // minimum_amount
         >=
         assert
         
-        // tl:696: received_amount = Gtxn[txn_index].AssetAmount
-        load 124                                            // txn_index
+        // tl:698: received_amount = Gtxn[txn_index].AssetAmount
+        load 126                                            // txn_index
         gtxns AssetAmount
-        store 125                                           // received_amount
+        store 127                                           // received_amount
     l15_end:
     
-    // tl:699: return received_amount
-    load 125                                                // received_amount
+    // tl:701: return received_amount
+    load 127                                                // received_amount
     retsub
 
 
-// tl:703: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+// tl:705: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
 __func__transfer:
-    store 126                                               // receiver [bytes]
-    store 127                                               // sender [bytes]
-    store 128                                               // amount [int]
-    store 129                                               // asset_id [int]
-    // tl:704: if !asset_id:
-    load 129                                                // asset_id
+    store 128                                               // receiver [bytes]
+    store 129                                               // sender [bytes]
+    store 130                                               // amount [int]
+    store 131                                               // asset_id [int]
+    // tl:706: if !asset_id:
+    load 131                                                // asset_id
     !
     bz l16_else
     // then:
-        // tl:705: inner_txn:
+        // tl:707: inner_txn:
         callsub _itxn_begin
-            // tl:706: TypeEnum: Pay
+            // tl:708: TypeEnum: Pay
             pushint 1                                       // Pay
             itxn_field TypeEnum
-            // tl:707: Sender: sender
-            load 127                                        // sender
+            // tl:709: Sender: sender
+            load 129                                        // sender
             itxn_field Sender
-            // tl:708: Receiver: receiver
-            load 126                                        // receiver
+            // tl:710: Receiver: receiver
+            load 128                                        // receiver
             itxn_field Receiver
-            // tl:709: Amount: amount
-            load 128                                        // amount
+            // tl:711: Amount: amount
+            load 130                                        // amount
             itxn_field Amount
-            // tl:710: Fee: 0
+            // tl:712: Fee: 0
             pushint 0
             itxn_field Fee
         callsub _itxn_submit
         // end inner_txn
         b l16_end
     l16_else:
-    // tl:712: else:
-        // tl:713: inner_txn:
+    // tl:714: else:
+        // tl:715: inner_txn:
         callsub _itxn_begin
-            // tl:714: TypeEnum: Axfer
+            // tl:716: TypeEnum: Axfer
             pushint 4                                       // Axfer
             itxn_field TypeEnum
-            // tl:715: Sender: sender
-            load 127                                        // sender
+            // tl:717: Sender: sender
+            load 129                                        // sender
             itxn_field Sender
-            // tl:716: AssetReceiver: receiver
-            load 126                                        // receiver
+            // tl:718: AssetReceiver: receiver
+            load 128                                        // receiver
             itxn_field AssetReceiver
-            // tl:717: AssetAmount: amount
-            load 128                                        // amount
+            // tl:719: AssetAmount: amount
+            load 130                                        // amount
             itxn_field AssetAmount
-            // tl:718: XferAsset: asset_id
-            load 129                                        // asset_id
+            // tl:720: XferAsset: asset_id
+            load 131                                        // asset_id
             itxn_field XferAsset
-            // tl:719: Fee: 0
+            // tl:721: Fee: 0
             pushint 0
             itxn_field Fee
         callsub _itxn_submit
         // end inner_txn
     l16_end:
-    // tl:722: return
+    // tl:724: return
     retsub
 
 
-// tl:726: func registry_emit_event(event_name: bytes, user_address: bytes, data: bytes):
+// tl:728: func registry_emit_event(event_name: bytes, user_address: bytes, data: bytes):
 __func__registry_emit_event:
-    store 130                                               // data [bytes]
-    store 131                                               // user_address [bytes]
-    store 132                                               // event_name [bytes]
-    // tl:727: inner_txn:
+    store 132                                               // data [bytes]
+    store 133                                               // user_address [bytes]
+    store 134                                               // event_name [bytes]
+    // tl:729: inner_txn:
     callsub _itxn_begin
-        // tl:728: TypeEnum: Appl
+        // tl:730: TypeEnum: Appl
         pushint 6                                           // Appl
         itxn_field TypeEnum
-        // tl:729: Fee: 0
+        // tl:731: Fee: 0
         pushint 0
         itxn_field Fee
-        // tl:730: ApplicationID: app_global_get(REGISTRY_APP_ID_KEY)
+        // tl:732: ApplicationID: app_global_get(REGISTRY_APP_ID_KEY)
         pushbytes REGISTRY_APP_ID_KEY                       // "registry_app_id"
         app_global_get
         itxn_field ApplicationID
-        // tl:731: ApplicationArgs[0]: "emit_event"
+        // tl:733: ApplicationArgs[0]: "emit_event"
         pushbytes "emit_event"
         itxn_field ApplicationArgs
-        // tl:732: ApplicationArgs[1]: event_name
-        load 132                                            // event_name
+        // tl:734: ApplicationArgs[1]: event_name
+        load 134                                            // event_name
         itxn_field ApplicationArgs
-        // tl:733: ApplicationArgs[2]: user_address
-        load 131                                            // user_address
+        // tl:735: ApplicationArgs[2]: user_address
+        load 133                                            // user_address
         itxn_field ApplicationArgs
-        // tl:734: ApplicationArgs[3]: data
-        load 130                                            // data
+        // tl:736: ApplicationArgs[3]: data
+        load 132                                            // data
         itxn_field ApplicationArgs
     callsub _itxn_submit
     // end inner_txn
-    // tl:736: return
+    // tl:738: return
+    retsub
+
+
+// tl:742: func get_balance(account_address: bytes, asset_id: int) int:
+__func__get_balance:
+    store 135                                               // asset_id [int]
+    store 136                                               // account_address [bytes]
+    // tl:743: int balance = 0 [slot 137]
+    pushint 0
+    store 137                                               // balance
+    // tl:744: if !asset_id:
+    load 135                                                // asset_id
+    !
+    bz l17_else
+    // then:
+        // tl:745: balance = balance(account_address) - min_balance(account_address)
+        load 136                                            // account_address
+        balance
+        load 136                                            // account_address
+        min_balance
+        -
+        store 137                                           // balance
+        b l17_end
+    l17_else:
+    // tl:746: else:
+        // tl:747: _, balance = asset_holding_get(AssetBalance, account_address, asset_id)
+        load 136                                            // account_address
+        load 135                                            // asset_id
+        asset_holding_get AssetBalance
+        pop                                                 // discarding value for _
+        store 137                                           // balance
+    l17_end:
+    // tl:749: return balance
+    load 137                                                // balance
     retsub
 
 
 _itxn_group_begin:
-  load 133; !; assert                                       // ensure no group active
-  int 1; store 133; retsub                                  // set group flag
+  load 138; !; assert                                       // ensure no group active
+  int 1; store 138; retsub                                  // set group flag
 
 _itxn_begin:
-  load 133
+  load 138
   switch _itxn_begin__0 _itxn_begin__1 _itxn_begin__2
   err
   _itxn_begin__0: itxn_begin; retsub                        // no group
-  _itxn_begin__1: itxn_begin; int 2; store 133; retsub      // start first txn of group
+  _itxn_begin__1: itxn_begin; int 2; store 138; retsub      // start first txn of group
   _itxn_begin__2: itxn_next; retsub                         // start next txn of group
 
 _itxn_submit:
-  load 133
+  load 138
   bz _itxn_submit__0
   retsub                                                    // in a group, don't submit
   _itxn_submit__0: itxn_submit; retsub                      // no group, submit
 
 _itxn_group_submit:
   itxn_submit
-  int 0; store 133; retsub                                  // set group flag to 0
+  int 0; store 138; retsub                                  // set group flag to 0
 
