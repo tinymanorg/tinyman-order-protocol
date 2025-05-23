@@ -570,6 +570,8 @@ end
 func do_router_swap(input_amount: int, output_amount: int, route: int[8], pools: Address[8], swaps: int) int:
     bytes router_app_address
     _, router_app_address = app_params_get(AppAddress, app_global_get(ROUTER_APP_ID_KEY))
+    int output_asset_id = route[swaps]
+    int initial_balance = get_balance(Global.CurrentApplicationAddress, output_asset_id)
     inner_group:
         transfer(route[0], input_amount, Global.CurrentApplicationAddress, router_app_address)
         inner_txn:
@@ -584,7 +586,7 @@ func do_router_swap(input_amount: int, output_amount: int, route: int[8], pools:
             ApplicationArgs[5]: itob(swaps)
         end
     end
-    int received_amount = extract_uint64(Itxn.LastLog, 28)
+    int received_amount = get_balance(Global.CurrentApplicationAddress, output_asset_id) - initial_balance
     return received_amount
 end
 
@@ -734,4 +736,15 @@ func registry_emit_event(event_name: bytes, user_address: bytes, data: bytes):
         ApplicationArgs[3]: data
     end
     return
+end
+
+
+func get_balance(account_address: bytes, asset_id: int) int:
+    int balance = 0
+    if !asset_id:
+        balance = balance(account_address) - min_balance(account_address)
+    else:
+        _, balance = asset_holding_get(AssetBalance, account_address, asset_id)
+    end
+    return balance
 end
