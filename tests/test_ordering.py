@@ -1,25 +1,20 @@
 from datetime import datetime, timezone
-from random import randint
 
 from algojig.exceptions import LogicEvalError
 from algojig import TealishProgram
 
 from algosdk import transaction
-from algosdk.account import generate_account
-from algosdk.encoding import decode_address, encode_address
-from algosdk.transaction import OnComplete
+from algosdk.encoding import decode_address
 
-from sdk.utils import calculate_approval_hash
-from tinyman.utils import TransactionGroup
 from tinyman.swap_router.utils import encode_router_args
+from tinyman.utils import int_to_bytes
 
 from sdk.constants import *
-from sdk.client import OrderingClient
 from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
-from sdk.structs import TriggerOrder, AppVersion
-
-from tests.constants import order_approval_program, order_app_extra_pages, order_app_global_schema, order_app_local_schema, WEEK, DAY, MAX_UINT64
+from sdk.structs import AppVersion, RecurringOrder, TriggerOrder
+from sdk.utils import calculate_approval_hash
+from tests.constants import order_approval_program, WEEK, DAY, MAX_UINT64
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -126,7 +121,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
 
 
-class PutOrderTests(OrderProtocolBaseTestCase):
+class PutTriggerOrderTests(OrderProtocolBaseTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -135,7 +130,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         super().setUp()
         self.ledger.set_account_balance(self.user_address, int(1e14))
 
-    def test_put_order_successful(self):
+    def test_put_trigger_order_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
@@ -145,7 +140,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -196,7 +191,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
 
-    def test_put_order_partial_successful(self):
+    def test_put_trigger_order_partial_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
@@ -206,7 +201,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -257,35 +252,7 @@ class PutOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order.creation_timestamp, now + DAY)
         self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
 
-    def test_put_order_insufficient_axfer(self):
-        pass
-
-    def test_put_order_expired_fail(self):
-        pass
-
-    def test_put_order_non_user_fail(self):
-        pass
-
-    def test_put_order_target_same_fail(self):
-        pass
-
-    def test_put_order_zero_amount_fail(self):
-        pass
-
-    def test_put_order_zero_target_amount_fail(self):
-        pass
-
-
-class CancelOrderTests(OrderProtocolBaseTestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-
-    def setUp(self):
-        super().setUp()
-        self.ledger.set_account_balance(self.user_address, int(1e14))
-
-    def test_cancel_order_successful(self):
+    def test_put_trigger_order_insufficient_axfer(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
@@ -295,7 +262,341 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ),
+            transaction.AssetTransferTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=(100_000 - 1),  # 1 less than said amount in appcall.
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_trigger_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(100_000),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(15_000),
+                    int_to_bytes(int(False)),
+                    int_to_bytes(4 * WEEK)
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.vault_app_id, decode_address(self.ordering_client.user_address)),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        # Put Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Gtxn[txn_index].AssetAmount == amount)')
+
+    def test_put_order_zero_amount_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ),
+            transaction.AssetTransferTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=100_000,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_trigger_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(15_000),
+                    int_to_bytes(int(False)),
+                    int_to_bytes(4 * WEEK)
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.vault_app_id, decode_address(self.ordering_client.user_address)),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        # Put Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(amount > 0)')
+
+    def test_put_order_zero_target_amount_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ),
+            transaction.AssetTransferTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=100_000,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_trigger_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(100_000),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(int(False)),
+                    int_to_bytes(4 * WEEK)
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.vault_app_id, decode_address(self.ordering_client.user_address)),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        # Put Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(target_amount > 0)')
+
+    def test_put_order_non_user_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(new_client.user_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(new_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(new_client.user_address, 100_000, self.talgo_asset_id)
+
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+        transactions = [
+            transaction.PaymentTxn(
+                sender=new_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ),
+            transaction.AssetTransferTxn(
+                sender=new_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=100_000,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=new_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_trigger_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(100_000),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(int(False)),
+                    int_to_bytes(0)
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.vault_app_id, decode_address(self.ordering_client.user_address)),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        # Put Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            new_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Txn.Sender == user_address)')
+
+    def test_put_order_target_same_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ),
+            transaction.AssetTransferTxn(
+                sender=self.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=100_000,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_trigger_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(100_000),
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(15_000),
+                    int_to_bytes(int(False)),
+                    int_to_bytes(4 * WEEK)
+                ],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.vault_app_id, decode_address(self.ordering_client.user_address)),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        # Put Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(asset_id != target_asset_id)')
+
+
+class CancelTriggerOrderTests(OrderProtocolBaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+    def setUp(self):
+        super().setUp()
+        self.ledger.set_account_balance(self.user_address, int(1e14))
+
+    def test_cancel_trigger_order_successful(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -310,7 +611,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
             duration=4 * WEEK
         )
 
-        # Cancel Order
+        # Cancel Trigger Order
         self.ledger.next_timestamp = now + DAY
         self.ordering_client.cancel_trigger_order(0)
 
@@ -353,7 +654,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.user_address))
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 100_000)
 
-    def test_cancel_order_partial_successful(self):
+    def test_cancel_trigger_order_partial_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
@@ -363,7 +664,7 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -378,14 +679,14 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
             duration=4 * WEEK
         )
 
-        # Mock partial filling.
+        # Mock partial filling. Amount is already collected.
         filled_amount = 10_000
         order_box_name = self.ordering_client.get_order_box_name(0)
         order = TriggerOrder(bytearray(self.ordering_client.get_box(order_box_name, "TriggerOrder")._data))
         order.filled_amount = filled_amount
         self.ledger.set_box(self.ordering_client.app_id, key=order_box_name, value=order._data)
 
-        # Cancel Order
+        # Cancel Trigger Order
         self.ledger.next_timestamp = now + DAY
         self.ordering_client.cancel_trigger_order(0)
 
@@ -423,10 +724,103 @@ class CancelOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 90_000)
 
     def test_cancel_order_partial_filled_fail(self):
-        pass
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=True,
+            duration=4 * WEEK
+        )
+
+        # Mock partial filling.
+        filled_amount = 10_000
+        collected_target_amount = 1500
+        order_box_name = self.ordering_client.get_order_box_name(0)
+        order = TriggerOrder(bytearray(self.ordering_client.get_box(order_box_name, "TriggerOrder")._data))
+        order.filled_amount = filled_amount
+        order.collected_target_amount = collected_target_amount
+        self.ledger.set_box(self.ordering_client.app_id, key=order_box_name, value=order._data)
+
+        # Cancel Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client.cancel_trigger_order(0)
+        self.assertEqual(e.exception.source['line'], 'assert(!order.collected_target_amount)')
 
     def test_cancel_order_non_user_fail(self):
-        pass
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=False,
+            duration=4 * WEEK
+        )
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+        order_box_name = self.ordering_client.get_order_box_name(0)
+
+        new_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(new_client.user_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(new_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(new_client.user_address, 100_000, self.talgo_asset_id)
+
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=new_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "cancel_trigger_order",
+                    int_to_bytes(0)
+                ],
+                boxes=[
+                    (0, order_box_name),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+                foreign_assets=[self.talgo_asset_id],
+                foreign_apps=[self.registry_app_id]
+            )
+        ]
+
+        # Cancel Trigger Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            new_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Txn.Sender == user_address)')
 
 
 class ExecuteOrderTests(OrderProtocolBaseTestCase):
@@ -448,7 +842,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -463,7 +857,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
             duration=4 * WEEK
         )
 
-        # Execute Order
+        # Execute Trigger Order
         # Simulate Swap by sending the `target_amount` from filler account.
         fill_amount = 100_000
         bought_amount = 15_000
@@ -592,7 +986,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -607,7 +1001,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
             duration=4 * WEEK
         )
 
-        # Execute Order
+        # Execute Trigger Order
         # Simulate Swap by sending the `target_amount` from filler account.
         filler_client = self.get_new_user_client()
         self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
@@ -742,7 +1136,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Trigger Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
@@ -768,7 +1162,7 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.ordering_client.application_address, 50_000, self.talgo_asset_id)
         self.ledger.set_account_balance(self.ordering_client.application_address, (15_000 // 2), self.tiny_asset_id)
 
-        # Execute Order
+        # Execute Trigger Order
         # Simulate Swap by sending the `target_amount` from filler account.
         filler_client = self.get_new_user_client()
         self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
@@ -886,6 +1280,149 @@ class ExecuteOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['fee_rate'], 30)
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
+    
+    def test_filler_insufficent_amt_returns_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=True,
+            duration=4 * WEEK
+        )
+
+        # Execute Trigger Order
+        # Fail `end_execute_trigger_order` at received_amount check.
+        # Simulate Swap by sending the `target_amount` from filler account.
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+
+        fill_amount = 50_000
+        bought_amount = (15_000 // 2)
+        fee_rate = 30
+        fee_amount = int((bought_amount * fee_rate) / 10_000)
+        collected_target_amount = bought_amount - fee_amount
+        sp = filler_client.get_suggested_params()
+        transactions = [
+            filler_client.prepare_start_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_amount - 2,  # Less than required price.
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+        ]
+
+        self.ledger.next_timestamp = now + DAY + 1
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
+
+        with self.assertRaises(LogicEvalError) as e:
+            filler_client._submit(transactions, additional_fees=4)
+        self.assertEqual(e.exception.source['line'], 'assert(Gtxn[txn_index].AssetAmount >= minimum_amount)')
+
+    def test_expired_trigger_order_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=False,
+            duration=4 * WEEK
+        )
+
+        # Execute Trigger Order
+        # Fail `start_execute_trigger_order` at Global.LatestTimestamp check.
+        # Simulate Swap by sending the `target_amount` from filler account.
+        fill_amount = 100_000
+        bought_amount = 15_000
+        fee_rate = 30
+        fee_amount = int((bought_amount * fee_rate) / 10_000)
+        collected_target_amount = bought_amount - fee_amount
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+
+        sp = filler_client.get_suggested_params()
+        transactions = [
+            filler_client.prepare_start_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_amount,
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+        ]
+
+        self.ledger.next_timestamp = now + DAY + now + DAY + 1
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
+        with self.assertRaises(LogicEvalError) as e:
+            filler_client._submit(transactions, additional_fees=4)
+        self.assertEqual(e.exception.source['line'], 'assert(Global.LatestTimestamp <= order.expiration_timestamp)')
 
 
 class PutRecurringOrderTests(OrderProtocolBaseTestCase):
@@ -907,7 +1444,7 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
@@ -980,6 +1517,500 @@ class PutRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(recurring_order.last_fill_timestamp, 0)
         self.assertEqual(recurring_order.creation_timestamp, now + DAY)
 
+    def test_put_recurring_order_zero_amount_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(amount > 0)')
+
+    def test_put_recurring_order_target_same_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(asset_id != target_asset_id)')
+
+    def test_put_recurring_order_zero_target_recurrence_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(interval),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(target_recurrence > 0)')
+
+
+    def test_put_recurring_order_incorrect_interval_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(60 + 1),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(!(interval % MINUTE))')
+
+    def test_app_not_opted_into_target_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount,
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(is_opted_in_to_target)')
+
+    def test_put_recurring_order_insufficient_axfer_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=self.ordering_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount - 1,  # Less than required.
+            ),
+            transaction.ApplicationCallTxn(
+                sender=self.ordering_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Gtxn[txn_index].AssetAmount == amount)')
+
+    def test_put_recurring_order_non_user_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        new_client = self.get_new_user_client()
+        self.ledger.set_account_balance(new_client.user_address, 700_000, self.talgo_asset_id)
+
+        # Prepare transactions.
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        new_boxes = {}
+        new_boxes[order_box_name] = TriggerOrder
+
+        amount = 100_000
+        target_recurrence = 7
+        interval = DAY
+        total_amount = amount * target_recurrence
+        transactions = [
+            transaction.PaymentTxn(
+                sender=new_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=self.ordering_client.calculate_min_balance(boxes=new_boxes)
+            ) if new_boxes else None,
+            transaction.AssetTransferTxn(
+                sender=new_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                index=self.talgo_asset_id,
+                amt=total_amount - 1,  # Less than required.
+            ),
+            transaction.ApplicationCallTxn(
+                sender=new_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "put_recurring_order",
+                    int_to_bytes(self.talgo_asset_id),
+                    int_to_bytes(amount),
+                    int_to_bytes(self.tiny_asset_id),
+                    int_to_bytes(0),
+                    int_to_bytes(0),
+                    int_to_bytes(target_recurrence),
+                    int_to_bytes(interval),
+                ],
+                accounts=[self.ordering_client.user_address],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id, self.vault_app_id],
+                boxes=[
+                    (0, order_box_name),
+                    (self.vault_app_id, decode_address(self.user_address)),
+                    (self.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+            )
+        ]
+
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            new_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Txn.Sender == user_address)')
+
 
 class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
     @classmethod
@@ -1000,7 +2031,7 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        # Put Order
+        # Put Recurring Order
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
         self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
         self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
@@ -1018,7 +2049,7 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
             interval=interval,
         )
 
-        # Cancel Order
+        # Cancel Recurring Order
         self.ledger.next_timestamp = now + DAY
         self.ordering_client.cancel_recurring_order(0)
 
@@ -1061,6 +2092,108 @@ class CancelRecurringOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.user_address))
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 700_000)
+
+    def test_non_zero_collected_target_amount_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        target_recurrence = 7
+        interval = DAY
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_recurring_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
+            interval=interval,
+        )
+
+        # Mock partial filling.
+        remaining_recurrences = target_recurrence - 1
+        collected_target_amount = 1500
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        order = RecurringOrder(bytearray(self.ordering_client.get_box(order_box_name, "RecurringOrder")._data))
+        order.remaining_recurrences = remaining_recurrences
+        order.collected_target_amount = collected_target_amount
+        order.last_fill_timestamp = now + DAY + interval
+        self.ledger.set_box(self.ordering_client.app_id, key=order_box_name, value=order._data)
+
+        # Cancel Recurring Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            self.ordering_client.cancel_recurring_order(0)
+        self.assertEqual(e.exception.source['line'], 'assert(!order.collected_target_amount)')
+
+    def test_non_user_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Recurring Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 700_000, self.talgo_asset_id)
+
+        target_recurrence = 7
+        interval = DAY
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_recurring_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_recurrence=target_recurrence,
+            min_target_amount=0,
+            max_target_amount=0,
+            interval=interval,
+        )
+
+        # Prepare transactions.
+        new_client = self.get_new_user_client()
+        sp = self.ordering_client.get_suggested_params()
+
+        order_box_name = self.ordering_client.get_recurring_order_box_name(0)
+        transactions = [
+            transaction.ApplicationCallTxn(
+                sender=new_client.user_address,
+                on_complete=transaction.OnComplete.NoOpOC,
+                sp=sp,
+                index=self.ordering_client.app_id,
+                app_args=[
+                    "cancel_recurring_order",
+                    int_to_bytes(0)
+                ],
+                boxes=[
+                    (0, order_box_name),
+                    (self.ordering_client.registry_app_id, self.ordering_client.get_registry_entry_box_name(self.user_address)),
+                ],
+                foreign_assets=[self.tiny_asset_id],
+                foreign_apps=[self.registry_app_id]
+            )
+        ]
+
+        # Cancel Recurring Order
+        self.ledger.next_timestamp = now + DAY
+        with self.assertRaises(LogicEvalError) as e:
+            new_client._submit(transactions, additional_fees=2)
+        self.assertEqual(e.exception.source['line'], 'assert(Txn.Sender == user_address)')
 
 
 class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
