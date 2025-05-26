@@ -38,6 +38,7 @@ const bytes IS_ENDORSED_KEY = "is_endorsed"
 router:
     create_application
     update_application
+    post_update
     init
     propose_manager
     accept_manager
@@ -76,6 +77,21 @@ end
 @public(OnCompletion=UpdateApplication)
 func update_application():
     assert(Txn.Sender == app_global_get("manager"))
+
+    # Gtxn +1 must be a call to post_update on this app
+    assert(Gtxn[+1].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[+1].ApplicationArgs[0] == "post_update")
+    return
+end
+
+
+# Permission: manager
+@public()
+func post_update():
+    assert(Txn.Sender == app_global_get("manager"))
+
+    # any version specific 'migrations' can be done here in future versions
+
     return
 end
 
