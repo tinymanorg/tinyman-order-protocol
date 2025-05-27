@@ -67,6 +67,22 @@ approve_version_event = Event(
 )
 
 
+propose_manager_event = Event(
+    name="propose_manager",
+    args=[
+        abi.Argument(arg_type="address", name="proposed_manager"),
+    ]
+)
+
+
+accept_manager_event = Event(
+    name="accept_manager",
+    args=[
+        abi.Argument(arg_type="address", name="new_manager"),
+    ]
+)
+
+
 trigger_order_fields = [
     abi.Argument(arg_type="uint64", name="asset_id"),
     abi.Argument(arg_type="uint64", name="amount"),
@@ -270,6 +286,8 @@ registry_events = [
     endorse_event,
     deendorse_event,
     approve_version_event,
+    propose_manager_event,
+    accept_manager_event,
     entry_event,
     registry_update_ordering_application_event,
     registry_put_trigger_order_event,
