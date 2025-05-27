@@ -63,9 +63,12 @@ func create_application(vault_app_id: int, router_app_id: int, manager_address: 
     app_global_put(MANAGER_KEY, manager_address)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
     app_global_put(ROUTER_APP_ID_KEY, router_app_id)
-    app_global_put(ORDER_FEE_RATE_KEY, 30)
-    app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 15)
-    app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 500_000_000)
+    # 0.15% fee for non governors
+    app_global_put(ORDER_FEE_RATE_KEY, 15)
+    # 0.1% fee for governors
+    app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 10)
+    # 2000 TINY Power required to be eligible for governor fees
+    app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 2_000_000_000)
 
     # create_application(vault_app_id,router_app_id,manager_address)
     log(ARC28Event("create_application(uint64,uint64,address)", itob(vault_app_id), itob(router_app_id), manager_address))
@@ -73,7 +76,6 @@ func create_application(vault_app_id: int, router_app_id: int, manager_address: 
 end
 
 
-# TODO: Remove function for mainnet
 @public(OnCompletion=UpdateApplication)
 func update_application():
     assert(Txn.Sender == app_global_get("manager"))
