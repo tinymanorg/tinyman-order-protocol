@@ -592,15 +592,9 @@ end
 
 
 func check_is_endorsed(user_address: bytes[32]):
-    int exists
-    bytes is_endorsed_bytes
     int is_endorsed
 
-    exists, is_endorsed_bytes = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
-
-    assert(exists)
-
-    is_endorsed = UncheckedCast(is_endorsed_bytes, int)
+    _, is_endorsed = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
     assert(is_endorsed)
 
     return
