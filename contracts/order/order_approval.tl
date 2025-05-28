@@ -609,7 +609,7 @@ end
 
 
 func calculate_fee_amount(target_amount: int, fee_rate: int) int:
-    int fee_amount = (target_amount * fee_rate) / 10000
+    int fee_amount = btoi((itob(target_amount) b* itob(fee_rate)) b/ itob(10000))
     return fee_amount
 end
 
