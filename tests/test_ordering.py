@@ -2365,7 +2365,7 @@ class ExecuteRecurringOrderTests(OrderProtocolBaseTestCase):
                     }
                 ],
             )
-        self.assertEqual(e.exception.source['line'], 'exists, is_endorsed = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)')
+        self.assertEqual(e.exception.source['line'], '_, is_endorsed = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)')
 
     def test_subsequent_fill_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
