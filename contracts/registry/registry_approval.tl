@@ -39,7 +39,6 @@ router:
     create_application
     update_application
     post_update
-    init
     propose_manager
     accept_manager
     asset_opt_in
@@ -99,16 +98,6 @@ end
 
 
 # Permission: manager
-@public()
-func init():
-    assert(Txn.Sender == app_global_get(MANAGER_KEY))
-
-    log(ARC28Event("init()"))
-    return
-end
-
-
-# permission: manager
 @public()
 func propose_manager(new_manager: bytes[32]):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
