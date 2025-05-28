@@ -1,5 +1,5 @@
 #pragma version 10
-#tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
+#tealish version git+https://github.com/tinymanorg/tealish.git@109a2f2e74549307fb002298f4189df3f0ed7c4f
 
 # Tinyman Order Protocol
 # License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE
@@ -12,7 +12,6 @@ struct TriggerOrder:
     amount: int
     target_asset_id: int
     target_amount: int
-    # Partial Filling.
     filled_amount: int
     collected_target_amount: int
     is_partial_allowed: int
@@ -25,11 +24,10 @@ end
 # Name: r<id>
 struct RecurringOrder:
     asset_id: int
-    # Per recurrence.
+    # `amount` is per recurrence
     amount: int
     target_asset_id: int
     collected_target_amount: int
-    # Recurring Order Only Fields.
     min_target_amount: int
     max_target_amount: int
     remaining_recurrences: int
@@ -74,7 +72,6 @@ const bytes IS_ENDORSED_KEY = "is_endorsed"
 const int RATE_SCALER = 18446744073709551615
 const int MAX_UINT64 = 18446744073709551615
 const int MINUTE = 60
-const int INTERVAL_TOLERANCE = 30
 
 
 # Versioning
@@ -342,7 +339,6 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
     check_execute_order_txn(start_execute_order_txn_index, "start_execute_trigger_order", order_id, fill_amount, index_diff)
 
     # Assert that user received the target amount or more.
-    # TODO: Review the calculations.
     int minimum_amount
     if !order.is_partial_allowed:
         minimum_amount = order.target_amount
@@ -379,6 +375,8 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
 end
 
 
+# Description: Collect the accumulated amount for an order
+# Permission: App owner (User)
 @public()
 func collect(order_id: int, order_type: bytes[1]):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
@@ -439,6 +437,7 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_t
     assert(asset_id != target_asset_id)
     assert(target_recurrence > 0)
     assert(interval >= MINUTE)
+    # `interval` must be divisible by minute
     assert(!(interval % MINUTE))
 
     if !max_target_amount:
@@ -446,6 +445,7 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_t
     end
     assert(min_target_amount <= max_target_amount)
 
+    # Optin to target asset if necessary
     if target_asset_id:
         int is_opted_in_to_target
         is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
@@ -481,8 +481,8 @@ func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_t
 end
 
 
-# Description: Send the `amount` or `amount - filled_amount` if partially filled to the user. Delete the order box.
-# Prerequisites: If partial filling is utilized, collect method must be called before.
+# Description: Send the `amount` (or `amount - filled_amount` if partially filled) to the user. Delete the order box.
+# Prerequisites: If the order is partially filled, the collect method must be called before cancelling.
 # Permission: App owner (User)
 @public()
 func cancel_recurring_order(order_id: int):
@@ -491,10 +491,11 @@ func cancel_recurring_order(order_id: int):
 
     box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
 
+    # Ensure there is no remaining amount to be collected
     assert(!order.collected_target_amount)
 
-    # It is assumed that the order is deleted once it is executed.
-    # Send remaining amount back to user.
+    # It is assumed that the order is deleted once it is executed
+    # Send remaining amount back to user
     int remaining_amount = order.amount * order.remaining_recurrences
 
     transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
@@ -506,7 +507,7 @@ func cancel_recurring_order(order_id: int):
     log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
     log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
 
-    # Delete the box.
+    # Delete the box
     _ = box_del(order)
 
     return
@@ -566,6 +567,7 @@ func execute_recurring_order(order_id: int, route: int[8], pools: Address[8], sw
 
     return
 end
+
 
 func do_router_swap(input_amount: int, output_amount: int, route: int[8], pools: Address[8], swaps: int) int:
     bytes router_app_address

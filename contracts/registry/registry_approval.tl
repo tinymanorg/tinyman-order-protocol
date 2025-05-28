@@ -1,5 +1,5 @@
 #pragma version 10
-#tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
+#tealish version git+https://github.com/tinymanorg/tealish.git@109a2f2e74549307fb002298f4189df3f0ed7c4f
 
 # Tinyman Order Protocol Registry
 # License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE
@@ -69,12 +69,12 @@ func create_application(vault_app_id: int, router_app_id: int, manager_address: 
     # 2000 TINY Power required to be eligible for governor fees
     app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 2_000_000_000)
 
-    # create_application(vault_app_id,router_app_id,manager_address)
     log(ARC28Event("create_application(uint64,uint64,address)", itob(vault_app_id), itob(router_app_id), manager_address))
     return
 end
 
 
+# Permission: manager
 @public(OnCompletion=UpdateApplication)
 func update_application():
     assert(Txn.Sender == app_global_get("manager"))
@@ -108,8 +108,8 @@ func propose_manager(new_manager: bytes[32]):
 end
 
 
-# The proposed manager must call this function to become the manager.
-# permission: proposed_manager
+# The proposed manager must call this function to become the manager
+# Permission: proposed_manager
 @public()
 func accept_manager():
     bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY)
@@ -122,7 +122,7 @@ func accept_manager():
 end
 
 
-# Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn.
+# Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn
 @public()
 func asset_opt_in(asset_id: int):
     int is_opted_in = opt_in_to_asset_if_needed(asset_id)
@@ -130,7 +130,6 @@ func asset_opt_in(asset_id: int):
     if is_opted_in:
         assert(Gtxn[-1].TypeEnum == Pay)
         assert(Gtxn[-1].Receiver == Global.CurrentApplicationAddress)
-        # TODO: replace the hardcoded value with Global.AssetOptInMinBalance.
         assert(Gtxn[-1].Amount >= 100000)
     end
 
@@ -138,6 +137,7 @@ func asset_opt_in(asset_id: int):
 end
 
 
+# Permission: manager
 @public()
 func set_order_fee_rate(fee_rate: int):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -149,6 +149,7 @@ func set_order_fee_rate(fee_rate: int):
 end
 
 
+# Permission: manager
 @public()
 func set_governor_order_fee_rate(fee_rate: int):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -160,6 +161,7 @@ func set_governor_order_fee_rate(fee_rate: int):
 end
 
 
+# Permission: manager
 @public()
 func set_governor_fee_rate_power_threshold(threshold: int):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -171,6 +173,7 @@ func set_governor_fee_rate_power_threshold(threshold: int):
 end
 
 
+# Permission: manager
 @public()
 func claim_fees(asset_id: int):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -196,6 +199,7 @@ func claim_fees(asset_id: int):
 end
 
 
+# Permission: manager
 @public()
 func endorse(user_address: bytes[32]):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -211,6 +215,7 @@ func endorse(user_address: bytes[32]):
 end
 
 
+# Permission: manager
 @public()
 func deendorse(user_address: bytes[32]):
     assert(Txn.Sender == app_global_get(MANAGER_KEY))
@@ -226,6 +231,7 @@ func deendorse(user_address: bytes[32]):
 end
 
 
+# Permission: anyone
 @public(OnCompletion=OptIn)
 func user_opt_in():
     log(ARC28Event("user_opt_in(address)", Txn.Sender))
@@ -233,7 +239,7 @@ func user_opt_in():
 end
 
 
-# Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
+# Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program
 # Permission: Anyone
 @public()
 func create_entry():
@@ -260,6 +266,7 @@ func create_entry():
 end
 
 
+# Permission: order app
 @public()
 func emit_event(event_name: bytes, user_address: bytes, data: bytes):
     box<Entry> entry = OpenBox(Concat("e", user_address))
@@ -285,7 +292,7 @@ func emit_event(event_name: bytes, user_address: bytes, data: bytes):
 end
 
 
-# Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program.
+# Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program
 # Permission: Anyone
 @public()
 func verify_update(version: int):

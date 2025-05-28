@@ -1,5 +1,5 @@
 #pragma version 10
-//tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
+//tealish version git+https://github.com/tinymanorg/tealish.git@109a2f2e74549307fb002298f4189df3f0ed7c4f
 
 // Tinyman Order Protocol Registry
 // License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE
@@ -32,7 +32,6 @@
 pushbytes "create_application"
 pushbytes "update_application"
 pushbytes "post_update"
-pushbytes "init"
 pushbytes "propose_manager"
 pushbytes "accept_manager"
 pushbytes "asset_opt_in"
@@ -48,7 +47,7 @@ pushbytes "emit_event"
 pushbytes "verify_update"
 pushbytes "approve_version"
 txna ApplicationArgs 0
-match route_create_application route_update_application route_post_update route_init route_propose_manager route_accept_manager route_asset_opt_in route_set_order_fee_rate route_set_governor_order_fee_rate route_set_governor_fee_rate_power_threshold route_claim_fees route_endorse route_deendorse route_user_opt_in route_create_entry route_emit_event route_verify_update route_approve_version
+match route_create_application route_update_application route_post_update route_propose_manager route_accept_manager route_asset_opt_in route_set_order_fee_rate route_set_governor_order_fee_rate route_set_governor_fee_rate_power_threshold route_claim_fees route_endorse route_deendorse route_user_opt_in route_create_entry route_emit_event route_verify_update route_approve_version
 err                                                         // unexpected value
 route_create_application:
     txn ApplicationID; pushint 0; ==; assert                // ApplicationID == 0
@@ -64,10 +63,6 @@ route_update_application:
 route_post_update:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
     callsub __func__post_update
-    pushint 1; return
-route_init:
-    txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
-    callsub __func__init
     pushint 1; return
 route_propose_manager:
     txn OnCompletion; pushint 0; ==; assert                 // assert OnCompletion == NoOp
@@ -142,41 +137,40 @@ route_approve_version:
 
 
 // Permission: anyone
-// tl:62: func create_application(vault_app_id: int, router_app_id: int, manager_address: bytes[32]):
+// tl:61: func create_application(vault_app_id: int, router_app_id: int, manager_address: bytes[32]):
 __func__create_application:
     store 1                                                 // manager_address [bytes[32]]
     store 2                                                 // router_app_id [int]
     store 3                                                 // vault_app_id [int]
-    // tl:63: app_global_put(MANAGER_KEY, manager_address)
+    // tl:62: app_global_put(MANAGER_KEY, manager_address)
     pushbytes MANAGER_KEY                                   // "manager"
     load 1                                                  // manager_address
     app_global_put
-    // tl:64: app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+    // tl:63: app_global_put(VAULT_APP_ID_KEY, vault_app_id)
     pushbytes VAULT_APP_ID_KEY                              // "vault_app_id"
     load 3                                                  // vault_app_id
     app_global_put
-    // tl:65: app_global_put(ROUTER_APP_ID_KEY, router_app_id)
+    // tl:64: app_global_put(ROUTER_APP_ID_KEY, router_app_id)
     pushbytes ROUTER_APP_ID_KEY                             // "router_app_id"
     load 2                                                  // router_app_id
     app_global_put
     // 0.15% fee for non governors
-    // tl:67: app_global_put(ORDER_FEE_RATE_KEY, 15)
+    // tl:66: app_global_put(ORDER_FEE_RATE_KEY, 15)
     pushbytes ORDER_FEE_RATE_KEY                            // "order_fee_rate"
     pushint 15
     app_global_put
     // 0.1% fee for governors
-    // tl:69: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 10)
+    // tl:68: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, 10)
     pushbytes GOVERNOR_ORDER_FEE_RATE_KEY                   // "governor_order_fee_rate"
     pushint 10
     app_global_put
     // 2000 TINY Power required to be eligible for governor fees
-    // tl:71: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 2_000_000_000)
+    // tl:70: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, 2_000_000_000)
     pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
     pushint 2000000000
     app_global_put
     
-    // create_application(vault_app_id,router_app_id,manager_address)
-    // tl:74: log(ARC28Event("create_application(uint64,uint64,address)", itob(vault_app_id), itob(router_app_id), manager_address))
+    // tl:72: log(ARC28Event("create_application(uint64,uint64,address)", itob(vault_app_id), itob(router_app_id), manager_address))
     pushbytes 0xc2cc3380                                    // SHA512_256("create_application(uint64,uint64,address)")[:4]
     load 3                                                  // vault_app_id
     itob
@@ -187,13 +181,14 @@ __func__create_application:
     concat
     concat
     log
-    // tl:75: return
+    // tl:73: return
     retsub
 
 
-// tl:80: func update_application():
+// Permission: manager
+// tl:79: func update_application():
 __func__update_application:
-    // tl:81: assert(Txn.Sender == app_global_get("manager"))
+    // tl:80: assert(Txn.Sender == app_global_get("manager"))
     txn Sender
     pushbytes "manager"
     app_global_get
@@ -201,7 +196,7 @@ __func__update_application:
     assert
     
     // Gtxn +1 must be a call to post_update on this app
-    // tl:84: assert(Gtxn[+1].ApplicationID == Global.CurrentApplicationID)
+    // tl:83: assert(Gtxn[+1].ApplicationID == Global.CurrentApplicationID)
     txn GroupIndex
     pushint 1
     +
@@ -209,7 +204,7 @@ __func__update_application:
     global CurrentApplicationID
     ==
     assert
-    // tl:85: assert(Gtxn[+1].ApplicationArgs[0] == "post_update")
+    // tl:84: assert(Gtxn[+1].ApplicationArgs[0] == "post_update")
     txn GroupIndex
     pushint 1
     +
@@ -217,14 +212,14 @@ __func__update_application:
     pushbytes "post_update"
     ==
     assert
-    // tl:86: return
+    // tl:85: return
     retsub
 
 
 // Permission: manager
-// tl:92: func post_update():
+// tl:91: func post_update():
 __func__post_update:
-    // tl:93: assert(Txn.Sender == app_global_get("manager"))
+    // tl:92: assert(Txn.Sender == app_global_get("manager"))
     txn Sender
     pushbytes "manager"
     app_global_get
@@ -233,96 +228,79 @@ __func__post_update:
     
     // any version specific 'migrations' can be done here in future versions
     
-    // tl:97: return
+    // tl:96: return
     retsub
 
 
 // Permission: manager
-// tl:103: func init():
-__func__init:
-    // tl:104: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+// tl:102: func propose_manager(new_manager: bytes[32]):
+__func__propose_manager:
+    store 4                                                 // new_manager [bytes[32]]
+    // tl:103: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:106: log(ARC28Event("init()"))
-    pushbytes 0x8707a1db                                    // SHA512_256("init()")[:4]
+    // tl:105: app_global_put(PROPOSED_MANAGER_KEY, new_manager)
+    pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
+    load 4                                                  // new_manager
+    app_global_put
+    // tl:106: log(ARC28Event("propose_manager(address)", new_manager))
+    pushbytes 0x9f8a67ff                                    // SHA512_256("propose_manager(address)")[:4]
+    load 4                                                  // new_manager
+    concat
     log
     // tl:107: return
     retsub
 
 
-// permission: manager
-// tl:113: func propose_manager(new_manager: bytes[32]):
-__func__propose_manager:
-    store 4                                                 // new_manager [bytes[32]]
-    // tl:114: assert(Txn.Sender == app_global_get(MANAGER_KEY))
-    txn Sender
-    pushbytes MANAGER_KEY                                   // "manager"
-    app_global_get
-    ==
-    assert
-    
-    // tl:116: app_global_put(PROPOSED_MANAGER_KEY, new_manager)
-    pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
-    load 4                                                  // new_manager
-    app_global_put
-    // tl:117: log(ARC28Event("propose_manager(address)", new_manager))
-    pushbytes 0x9f8a67ff                                    // SHA512_256("propose_manager(address)")[:4]
-    load 4                                                  // new_manager
-    concat
-    log
-    // tl:118: return
-    retsub
-
-
-// The proposed manager must call this function to become the manager.
-// permission: proposed_manager
-// tl:125: func accept_manager():
+// The proposed manager must call this function to become the manager
+// Permission: proposed_manager
+// tl:114: func accept_manager():
 __func__accept_manager:
-    // tl:126: bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY) [slot 5]
+    // tl:115: bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY) [slot 5]
     pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
     app_global_get
     store 5                                                 // proposed_manager
-    // tl:127: assert(Txn.Sender == proposed_manager)
+    // tl:116: assert(Txn.Sender == proposed_manager)
     txn Sender
     load 5                                                  // proposed_manager
     ==
     assert
     
-    // tl:129: app_global_put(MANAGER_KEY, proposed_manager)
+    // tl:118: app_global_put(MANAGER_KEY, proposed_manager)
     pushbytes MANAGER_KEY                                   // "manager"
     load 5                                                  // proposed_manager
     app_global_put
-    // tl:130: app_global_put(PROPOSED_MANAGER_KEY, "")
+    // tl:119: app_global_put(PROPOSED_MANAGER_KEY, "")
     pushbytes PROPOSED_MANAGER_KEY                          // "proposed_manager"
     pushbytes ""
     app_global_put
-    // tl:131: log(ARC28Event("accept_manager(address)", proposed_manager))
+    // tl:120: log(ARC28Event("accept_manager(address)", proposed_manager))
     pushbytes 0xbb6affe3                                    // SHA512_256("accept_manager(address)")[:4]
     load 5                                                  // proposed_manager
     concat
     log
-    // tl:132: return
+    // tl:121: return
     retsub
 
 
-// Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn.
-// tl:138: func asset_opt_in(asset_id: int):
+// Prerequisites: Required Algo to cover minimum balance increase must be supplied in previous Gtxn
+// tl:127: func asset_opt_in(asset_id: int):
 __func__asset_opt_in:
     store 6                                                 // asset_id [int]
-    // tl:139: int is_opted_in = opt_in_to_asset_if_needed(asset_id) [slot 7]
+    // tl:128: int is_opted_in = opt_in_to_asset_if_needed(asset_id) [slot 7]
     load 6                                                  // asset_id
     callsub __func__opt_in_to_asset_if_needed
     store 7                                                 // is_opted_in
     
-    // tl:141: if is_opted_in:
+    // tl:130: if is_opted_in:
     load 7                                                  // is_opted_in
     bz l0_end
     // then:
-        // tl:142: assert(Gtxn[-1].TypeEnum == Pay)
+        // tl:131: assert(Gtxn[-1].TypeEnum == Pay)
         txn GroupIndex
         pushint 1
         -
@@ -330,7 +308,7 @@ __func__asset_opt_in:
         pushint 1                                           // Pay
         ==
         assert
-        // tl:143: assert(Gtxn[-1].Receiver == Global.CurrentApplicationAddress)
+        // tl:132: assert(Gtxn[-1].Receiver == Global.CurrentApplicationAddress)
         txn GroupIndex
         pushint 1
         -
@@ -338,8 +316,7 @@ __func__asset_opt_in:
         global CurrentApplicationAddress
         ==
         assert
-        // TODO: replace the hardcoded value with Global.AssetOptInMinBalance.
-        // tl:145: assert(Gtxn[-1].Amount >= 100000)
+        // tl:133: assert(Gtxn[-1].Amount >= 100000)
         txn GroupIndex
         pushint 1
         -
@@ -349,134 +326,138 @@ __func__asset_opt_in:
         assert
     l0_end:
     
-    // tl:148: return
+    // tl:136: return
     retsub
 
 
-// tl:153: func set_order_fee_rate(fee_rate: int):
+// Permission: manager
+// tl:142: func set_order_fee_rate(fee_rate: int):
 __func__set_order_fee_rate:
     store 8                                                 // fee_rate [int]
-    // tl:154: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:143: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:156: app_global_put(ORDER_FEE_RATE_KEY, fee_rate)
+    // tl:145: app_global_put(ORDER_FEE_RATE_KEY, fee_rate)
     pushbytes ORDER_FEE_RATE_KEY                            // "order_fee_rate"
     load 8                                                  // fee_rate
     app_global_put
     
-    // tl:158: log(ARC28Event("set_order_fee_rate(uint64)", itob(fee_rate)))
+    // tl:147: log(ARC28Event("set_order_fee_rate(uint64)", itob(fee_rate)))
     pushbytes 0x39a49787                                    // SHA512_256("set_order_fee_rate(uint64)")[:4]
     load 8                                                  // fee_rate
     itob
     concat
     log
-    // tl:159: return
+    // tl:148: return
     retsub
 
 
-// tl:164: func set_governor_order_fee_rate(fee_rate: int):
+// Permission: manager
+// tl:154: func set_governor_order_fee_rate(fee_rate: int):
 __func__set_governor_order_fee_rate:
     store 9                                                 // fee_rate [int]
-    // tl:165: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:155: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:167: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, fee_rate)
+    // tl:157: app_global_put(GOVERNOR_ORDER_FEE_RATE_KEY, fee_rate)
     pushbytes GOVERNOR_ORDER_FEE_RATE_KEY                   // "governor_order_fee_rate"
     load 9                                                  // fee_rate
     app_global_put
     
-    // tl:169: log(ARC28Event("set_governor_order_fee_rate(uint64)", itob(fee_rate)))
+    // tl:159: log(ARC28Event("set_governor_order_fee_rate(uint64)", itob(fee_rate)))
     pushbytes 0xc1305811                                    // SHA512_256("set_governor_order_fee_rate(uint64)")[:4]
     load 9                                                  // fee_rate
     itob
     concat
     log
-    // tl:170: return
+    // tl:160: return
     retsub
 
 
-// tl:175: func set_governor_fee_rate_power_threshold(threshold: int):
+// Permission: manager
+// tl:166: func set_governor_fee_rate_power_threshold(threshold: int):
 __func__set_governor_fee_rate_power_threshold:
     store 10                                                // threshold [int]
-    // tl:176: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:167: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:178: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, threshold)
+    // tl:169: app_global_put(GOVERNOR_FEE_RATE_POWER_THRESHOLD, threshold)
     pushbytes GOVERNOR_FEE_RATE_POWER_THRESHOLD             // "governor_fee_rate_power_threshold"
     load 10                                                 // threshold
     app_global_put
     
-    // tl:180: log(ARC28Event("set_governor_fee_rate_power_threshold(uint64)", itob(threshold)))
+    // tl:171: log(ARC28Event("set_governor_fee_rate_power_threshold(uint64)", itob(threshold)))
     pushbytes 0x746c09e0                                    // SHA512_256("set_governor_fee_rate_power_threshold(uint64)")[:4]
     load 10                                                 // threshold
     itob
     concat
     log
-    // tl:181: return
+    // tl:172: return
     retsub
 
 
-// tl:186: func claim_fees(asset_id: int):
+// Permission: manager
+// tl:178: func claim_fees(asset_id: int):
 __func__claim_fees:
     store 11                                                // asset_id [int]
-    // tl:187: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:179: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:189: int opted_in [slot 12]
-    // tl:190: int asset_balance [slot 13]
+    // tl:181: int opted_in [slot 12]
+    // tl:182: int asset_balance [slot 13]
     
-    // tl:192: if asset_id:
+    // tl:184: if asset_id:
     load 11                                                 // asset_id
     bz l1_else
     // then:
-        // tl:193: opted_in, asset_balance = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:185: opted_in, asset_balance = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
         load 11                                             // asset_id
         asset_holding_get AssetBalance
         store 12                                            // opted_in
         store 13                                            // asset_balance
-        // tl:194: assert(opted_in)
+        // tl:186: assert(opted_in)
         load 12                                             // opted_in
         assert
         b l1_end
     l1_else:
-    // tl:195: else:
-        // tl:196: asset_balance = balance(Global.CurrentApplicationAddress)
+    // tl:187: else:
+        // tl:188: asset_balance = balance(Global.CurrentApplicationAddress)
         global CurrentApplicationAddress
         balance
         store 13                                            // asset_balance
         
-        // tl:198: int minimum_balance = min_balance(Global.CurrentApplicationAddress) [slot 14]
+        // tl:190: int minimum_balance = min_balance(Global.CurrentApplicationAddress) [slot 14]
         global CurrentApplicationAddress
         min_balance
         store 14                                            // minimum_balance
-        // tl:199: asset_balance = asset_balance - minimum_balance
+        // tl:191: asset_balance = asset_balance - minimum_balance
         load 13                                             // asset_balance
         load 14                                             // minimum_balance
         -
         store 13                                            // asset_balance
     l1_end:
     
-    // tl:202: assert(asset_balance)
+    // tl:194: assert(asset_balance)
     load 13                                                 // asset_balance
     assert
-    // tl:203: transfer(asset_id, asset_balance, Global.CurrentApplicationAddress, app_global_get(MANAGER_KEY))
+    // tl:195: transfer(asset_id, asset_balance, Global.CurrentApplicationAddress, app_global_get(MANAGER_KEY))
     load 11                                                 // asset_id
     load 13                                                 // asset_balance
     global CurrentApplicationAddress
@@ -484,7 +465,7 @@ __func__claim_fees:
     app_global_get
     callsub __func__transfer
     
-    // tl:205: log(ARC28Event("claim_fees(uint64,uint64)", itob(asset_id), itob(asset_balance)))
+    // tl:197: log(ARC28Event("claim_fees(uint64,uint64)", itob(asset_id), itob(asset_balance)))
     pushbytes 0xbb6ce7d1                                    // SHA512_256("claim_fees(uint64,uint64)")[:4]
     load 11                                                 // asset_id
     itob
@@ -493,132 +474,135 @@ __func__claim_fees:
     concat
     concat
     log
-    // tl:206: return
+    // tl:198: return
     retsub
 
 
-// tl:211: func endorse(user_address: bytes[32]):
+// Permission: manager
+// tl:204: func endorse(user_address: bytes[32]):
 __func__endorse:
     store 15                                                // user_address [bytes[32]]
-    // tl:212: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:205: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:214: int is_endorsed [slot 16]
-    // tl:215: is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
+    // tl:207: int is_endorsed [slot 16]
+    // tl:208: is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
     load 15                                                 // user_address
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     app_local_get
     store 16                                                // is_endorsed
     
-    // tl:217: assert(!is_endorsed)
+    // tl:210: assert(!is_endorsed)
     load 16                                                 // is_endorsed
     !
     assert
-    // tl:218: app_local_put(user_address, IS_ENDORSED_KEY, 1)
+    // tl:211: app_local_put(user_address, IS_ENDORSED_KEY, 1)
     load 15                                                 // user_address
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     pushint 1
     app_local_put
     
-    // tl:220: log(ARC28Event("endorse(address)", user_address))
+    // tl:213: log(ARC28Event("endorse(address)", user_address))
     pushbytes 0xd10b6a81                                    // SHA512_256("endorse(address)")[:4]
     load 15                                                 // user_address
     concat
     log
-    // tl:221: return
+    // tl:214: return
     retsub
 
 
-// tl:226: func deendorse(user_address: bytes[32]):
+// Permission: manager
+// tl:220: func deendorse(user_address: bytes[32]):
 __func__deendorse:
     store 17                                                // user_address [bytes[32]]
-    // tl:227: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:221: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
     ==
     assert
     
-    // tl:229: int is_endorsed [slot 18]
-    // tl:230: is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
+    // tl:223: int is_endorsed [slot 18]
+    // tl:224: is_endorsed = app_local_get(user_address, IS_ENDORSED_KEY)
     load 17                                                 // user_address
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     app_local_get
     store 18                                                // is_endorsed
     
-    // tl:232: assert(is_endorsed)
+    // tl:226: assert(is_endorsed)
     load 18                                                 // is_endorsed
     assert
-    // tl:233: app_local_del(user_address, IS_ENDORSED_KEY)
+    // tl:227: app_local_del(user_address, IS_ENDORSED_KEY)
     load 17                                                 // user_address
     pushbytes IS_ENDORSED_KEY                               // "is_endorsed"
     app_local_del
     
-    // tl:235: log(ARC28Event("deendorse(address)", user_address))
+    // tl:229: log(ARC28Event("deendorse(address)", user_address))
     pushbytes 0xbe762fd4                                    // SHA512_256("deendorse(address)")[:4]
     load 17                                                 // user_address
     concat
     log
-    // tl:236: return
+    // tl:230: return
     retsub
 
 
-// tl:241: func user_opt_in():
+// Permission: anyone
+// tl:236: func user_opt_in():
 __func__user_opt_in:
-    // tl:242: log(ARC28Event("user_opt_in(address)", Txn.Sender))
+    // tl:237: log(ARC28Event("user_opt_in(address)", Txn.Sender))
     pushbytes 0x85c1ac52                                    // SHA512_256("user_opt_in(address)")[:4]
     txn Sender
     concat
     log
-    // tl:243: return
+    // tl:238: return
     retsub
 
 
-// Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program.
+// Description: Assert that `Txn.GroupIndex - 1` is an app creation transaction and verify approval_program
 // Permission: Anyone
-// tl:250: func create_entry():
+// tl:245: func create_entry():
 __func__create_entry:
-    // tl:251: box<Entry> entry = CreateBox(Concat("e", Txn.Sender)) [slot 19]
+    // tl:246: box<Entry> entry = CreateBox(Concat("e", Txn.Sender)) [slot 19]
     pushbytes "e"
     txn Sender
     concat
     dup; pushint 8; box_create; assert                      // create & assert created
     store 19                                                // box:entry
     
-    // tl:253: int app_creation_index = Txn.GroupIndex - 1 [slot 20]
+    // tl:248: int app_creation_index = Txn.GroupIndex - 1 [slot 20]
     txn GroupIndex
     pushint 1
     -
     store 20                                                // app_creation_index
-    // tl:254: assert(Gtxn[app_creation_index].Sender == Txn.Sender)
+    // tl:249: assert(Gtxn[app_creation_index].Sender == Txn.Sender)
     load 20                                                 // app_creation_index
     gtxns Sender
     txn Sender
     ==
     assert
-    // tl:255: assert(Gtxn[app_creation_index].TypeEnum == Appl)
+    // tl:250: assert(Gtxn[app_creation_index].TypeEnum == Appl)
     load 20                                                 // app_creation_index
     gtxns TypeEnum
     pushint 6                                               // Appl
     ==
     assert
-    // tl:256: assert(Gtxn[app_creation_index].OnCompletion == NoOp)
+    // tl:251: assert(Gtxn[app_creation_index].OnCompletion == NoOp)
     load 20                                                 // app_creation_index
     gtxns OnCompletion
     pushint 0                                               // NoOp
     ==
     assert
-    // tl:257: assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
+    // tl:252: assert(Gtxn[app_creation_index].ApplicationArgs[0] == "create_application")
     load 20                                                 // app_creation_index
     gtxnsa ApplicationArgs 0
     pushbytes "create_application"
     ==
     assert
-    // tl:258: assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
+    // tl:253: assert(Gtxn[app_creation_index].ApplicationArgs[1] == itob(Global.CurrentApplicationID))
     load 20                                                 // app_creation_index
     gtxnsa ApplicationArgs 1
     global CurrentApplicationID
@@ -626,13 +610,13 @@ __func__create_entry:
     ==
     assert
     
-    // tl:260: verify_approval_program(app_creation_index, app_global_get(LATEST_VERSION_KEY))
+    // tl:255: verify_approval_program(app_creation_index, app_global_get(LATEST_VERSION_KEY))
     load 20                                                 // app_creation_index
     pushbytes LATEST_VERSION_KEY                            // "latest_version"
     app_global_get
     callsub __func__verify_approval_program
     
-    // tl:262: entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
+    // tl:257: entry.app_id = Gtxn[app_creation_index].CreatedApplicationID
     load 20                                                 // app_creation_index
     gtxns CreatedApplicationID
     itob
@@ -642,11 +626,11 @@ __func__create_entry:
     box_replace
     // boxset entry.app_id
     
-    // tl:264: int entry_count = app_global_get(ENTRY_COUNT_KEY) [slot 21]
+    // tl:259: int entry_count = app_global_get(ENTRY_COUNT_KEY) [slot 21]
     pushbytes ENTRY_COUNT_KEY                               // "entry_count"
     app_global_get
     store 21                                                // entry_count
-    // tl:265: app_global_put(ENTRY_COUNT_KEY, entry_count + 1)
+    // tl:260: app_global_put(ENTRY_COUNT_KEY, entry_count + 1)
     pushbytes ENTRY_COUNT_KEY                               // "entry_count"
     load 21                                                 // entry_count
     pushint 1
@@ -654,7 +638,7 @@ __func__create_entry:
     app_global_put
     
     // Logs
-    // tl:268: log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
+    // tl:263: log(ARC28Event("entry(address,uint64)", Txn.Sender, itob(entry.app_id)))
     pushbytes 0x416d501e                                    // SHA512_256("entry(address,uint64)")[:4]
     txn Sender
     load 19; pushint 0; pushint 8; box_extract; btoi// entry.app_id
@@ -663,38 +647,39 @@ __func__create_entry:
     concat
     log
     
-    // tl:270: return
+    // tl:265: return
     retsub
 
 
-// tl:275: func emit_event(event_name: bytes, user_address: bytes, data: bytes):
+// Permission: order app
+// tl:271: func emit_event(event_name: bytes, user_address: bytes, data: bytes):
 __func__emit_event:
     store 22                                                // data [bytes]
     store 23                                                // user_address [bytes]
     store 24                                                // event_name [bytes]
-    // tl:276: box<Entry> entry = OpenBox(Concat("e", user_address)) [slot 25]
+    // tl:272: box<Entry> entry = OpenBox(Concat("e", user_address)) [slot 25]
     pushbytes "e"
     load 23                                                 // user_address
     concat
     dup; box_len; assert; pushint 8; ==; assert             // len(box) == Entry.size
     store 25                                                // box:entry
-    // tl:277: int app_id = Global.CallerApplicationID [slot 26]
+    // tl:273: int app_id = Global.CallerApplicationID [slot 26]
     global CallerApplicationID
     store 26                                                // app_id
-    // tl:278: assert(app_id == entry.app_id)
+    // tl:274: assert(app_id == entry.app_id)
     load 26                                                 // app_id
     load 25; pushint 0; pushint 8; box_extract; btoi// entry.app_id
     ==
     assert
     
-    // tl:280: bytes event [slot 27]
-    // tl:281: if event_name == "put_trigger_order":
+    // tl:276: bytes event [slot 27]
+    // tl:277: if event_name == "put_trigger_order":
     load 24                                                 // event_name
     pushbytes "put_trigger_order"
     ==
     bz l2_elif_0
     // then:
-        // tl:282: event = ARC28Event("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+        // tl:278: event = ARC28Event("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
         pushbytes 0x71c53550                                // SHA512_256("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
         load 26                                             // app_id
         itob
@@ -704,12 +689,12 @@ __func__emit_event:
         store 27                                            // event
         b l2_end
     l2_elif_0:
-    // tl:283: elif event_name == "update_trigger_order":
+    // tl:279: elif event_name == "update_trigger_order":
         load 24                                             // event_name
         pushbytes "update_trigger_order"
         ==
         bz l2_elif_1
-            // tl:284: event = ARC28Event("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            // tl:280: event = ARC28Event("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
             pushbytes 0x7363e49b                            // SHA512_256("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
             load 26                                         // app_id
             itob
@@ -719,12 +704,12 @@ __func__emit_event:
             store 27                                        // event
             b l2_end
     l2_elif_1:
-    // tl:285: elif event_name == "cancel_trigger_order":
+    // tl:281: elif event_name == "cancel_trigger_order":
         load 24                                             // event_name
         pushbytes "cancel_trigger_order"
         ==
         bz l2_elif_2
-            // tl:286: event = ARC28Event("cancel_trigger_order(uint64,uint64)", itob(app_id), data)
+            // tl:282: event = ARC28Event("cancel_trigger_order(uint64,uint64)", itob(app_id), data)
             pushbytes 0x2e3c469f                            // SHA512_256("cancel_trigger_order(uint64,uint64)")[:4]
             load 26                                         // app_id
             itob
@@ -734,12 +719,12 @@ __func__emit_event:
             store 27                                        // event
             b l2_end
     l2_elif_2:
-    // tl:287: elif event_name == "put_recurring_order":
+    // tl:283: elif event_name == "put_recurring_order":
         load 24                                             // event_name
         pushbytes "put_recurring_order"
         ==
         bz l2_elif_3
-            // tl:288: event = ARC28Event("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            // tl:284: event = ARC28Event("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
             pushbytes 0xc544bee9                            // SHA512_256("put_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
             load 26                                         // app_id
             itob
@@ -749,12 +734,12 @@ __func__emit_event:
             store 27                                        // event
             b l2_end
     l2_elif_3:
-    // tl:289: elif event_name == "update_recurring_order":
+    // tl:285: elif event_name == "update_recurring_order":
         load 24                                             // event_name
         pushbytes "update_recurring_order"
         ==
         bz l2_elif_4
-            // tl:290: event = ARC28Event("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
+            // tl:286: event = ARC28Event("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
             pushbytes 0x2cd4ef7c                            // SHA512_256("update_recurring_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)")[:4]
             load 26                                         // app_id
             itob
@@ -764,12 +749,12 @@ __func__emit_event:
             store 27                                        // event
             b l2_end
     l2_elif_4:
-    // tl:291: elif event_name == "cancel_recurring_order":
+    // tl:287: elif event_name == "cancel_recurring_order":
         load 24                                             // event_name
         pushbytes "cancel_recurring_order"
         ==
         bz l2_end
-            // tl:292: event = ARC28Event("cancel_recurring_order(uint64,uint64)", itob(app_id), data)
+            // tl:288: event = ARC28Event("cancel_recurring_order(uint64,uint64)", itob(app_id), data)
             pushbytes 0x8f787e17                            // SHA512_256("cancel_recurring_order(uint64,uint64)")[:4]
             load 26                                         // app_id
             itob
@@ -778,31 +763,31 @@ __func__emit_event:
             concat
             store 27                                        // event
     l2_end:
-    // tl:294: log(event)
+    // tl:290: log(event)
     load 27                                                 // event
     log
-    // tl:295: return
+    // tl:291: return
     retsub
 
 
-// Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program.
+// Description: Assert that `Txn.GroupIndex - 1` is an app update transaction and verify approval_program
 // Permission: Anyone
-// tl:302: func verify_update(version: int):
+// tl:298: func verify_update(version: int):
 __func__verify_update:
     store 28                                                // version [int]
     
-    // tl:304: int app_update_index = Txn.GroupIndex - 1 [slot 29]
+    // tl:300: int app_update_index = Txn.GroupIndex - 1 [slot 29]
     txn GroupIndex
     pushint 1
     -
     store 29                                                // app_update_index
-    // tl:305: assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
+    // tl:301: assert(Gtxn[app_update_index].ApplicationArgs[0] == "update_application")
     load 29                                                 // app_update_index
     gtxnsa ApplicationArgs 0
     pushbytes "update_application"
     ==
     assert
-    // tl:306: assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
+    // tl:302: assert(Gtxn[app_update_index].ApplicationArgs[1] == itob(version))
     load 29                                                 // app_update_index
     gtxnsa ApplicationArgs 1
     load 28                                                 // version
@@ -810,12 +795,12 @@ __func__verify_update:
     ==
     assert
     
-    // tl:308: verify_approval_program(app_update_index, version)
+    // tl:304: verify_approval_program(app_update_index, version)
     load 29                                                 // app_update_index
     load 28                                                 // version
     callsub __func__verify_approval_program
     
-    // tl:310: log(ARC28Event("update_ordering_application(uint64,uint64)", itob(Gtxn[app_update_index].ApplicationID), itob(version)))
+    // tl:306: log(ARC28Event("update_ordering_application(uint64,uint64)", itob(Gtxn[app_update_index].ApplicationID), itob(version)))
     pushbytes 0x04f5c845                                    // SHA512_256("update_ordering_application(uint64,uint64)")[:4]
     load 29                                                 // app_update_index
     gtxns ApplicationID
@@ -825,16 +810,16 @@ __func__verify_update:
     concat
     concat
     log
-    // tl:311: return
+    // tl:307: return
     retsub
 
 
 // Permission: Manager
-// tl:317: func approve_version(version: int, approval_hash: bytes[32]):
+// tl:313: func approve_version(version: int, approval_hash: bytes[32]):
 __func__approve_version:
     store 30                                                // approval_hash [bytes[32]]
     store 31                                                // version [int]
-    // tl:318: assert(Txn.Sender == app_global_get(MANAGER_KEY))
+    // tl:314: assert(Txn.Sender == app_global_get(MANAGER_KEY))
     txn Sender
     pushbytes MANAGER_KEY                                   // "manager"
     app_global_get
@@ -842,26 +827,26 @@ __func__approve_version:
     assert
     
     // the hash can be updated for the current version or a new version but not a past version
-    // tl:321: assert(version >= app_global_get(LATEST_VERSION_KEY))
+    // tl:317: assert(version >= app_global_get(LATEST_VERSION_KEY))
     load 31                                                 // version
     pushbytes LATEST_VERSION_KEY                            // "latest_version"
     app_global_get
     >=
     assert
-    // tl:322: app_global_put(LATEST_VERSION_KEY, version)
+    // tl:318: app_global_put(LATEST_VERSION_KEY, version)
     pushbytes LATEST_VERSION_KEY                            // "latest_version"
     load 31                                                 // version
     app_global_put
     
     // approval_hash must be computed using the same algorithm as used in verify_update
-    // tl:325: box<AppVersion> version_box = OpenOrCreateBox(concat("v", itob(version))) [slot 32]
+    // tl:321: box<AppVersion> version_box = OpenOrCreateBox(concat("v", itob(version))) [slot 32]
     pushbytes "v"
     load 31                                                 // version
     itob
     concat
     dup; pushint 982; box_create; pop                       // create if didn't already exist
     store 32                                                // box:version_box
-    // tl:326: version_box.approval_hash = approval_hash
+    // tl:322: version_box.approval_hash = approval_hash
     load 30                                                 // approval_hash
     load 32
     pushint 0
@@ -869,7 +854,7 @@ __func__approve_version:
     box_replace
     // boxset version_box.approval_hash
     
-    // tl:328: log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))
+    // tl:324: log(ARC28Event("approve_version(uint64,byte[32])", itob(version), approval_hash))
     pushbytes 0x7d4292df                                    // SHA512_256("approve_version(uint64,byte[32])")[:4]
     load 31                                                 // version
     itob
@@ -877,15 +862,15 @@ __func__approve_version:
     concat
     concat
     log
-    // tl:329: return
+    // tl:325: return
     retsub
 
 
-// tl:333: func verify_approval_program(gtxn_index: int, version: int):
+// tl:329: func verify_approval_program(gtxn_index: int, version: int):
 __func__verify_approval_program:
     store 33                                                // version [int]
     store 34                                                // gtxn_index [int]
-    // tl:334: box<AppVersion> version_box = OpenBox(concat("v", itob(version))) [slot 35]
+    // tl:330: box<AppVersion> version_box = OpenBox(concat("v", itob(version))) [slot 35]
     pushbytes "v"
     load 33                                                 // version
     itob
@@ -894,14 +879,14 @@ __func__verify_approval_program:
     store 35                                                // box:version_box
     
     // 'page' here refers to chunks of size 4096. They are not the same as 'ExtraProgramPages' which are 2048 sized pages.
-    // tl:337: int last_page = Gtxn[gtxn_index].NumApprovalProgramPages [slot 36]
+    // tl:333: int last_page = Gtxn[gtxn_index].NumApprovalProgramPages [slot 36]
     load 34                                                 // gtxn_index
     gtxns NumApprovalProgramPages
     store 36                                                // last_page
-    // tl:338: bytes chunk_hashes = "" [slot 37]
+    // tl:334: bytes chunk_hashes = "" [slot 37]
     pushbytes ""
     store 37                                                // chunk_hashes
-    // tl:339: for i in 0:last_page:
+    // tl:335: for i in 0:last_page:
         pushint 0
         store 38                                            // i
         l3_for:
@@ -909,7 +894,7 @@ __func__verify_approval_program:
         load 36                                             // last_page
         ==
         bnz l3_end
-        // tl:340: chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
+        // tl:336: chunk_hashes = concat(chunk_hashes, sha256(Gtxn[gtxn_index].ApprovalProgramPages[i]))
         load 37                                             // chunk_hashes
         load 34                                             // gtxn_index
         load 38                                             // i
@@ -923,42 +908,42 @@ __func__verify_approval_program:
         store 38                                            // i
         b l3_for
         l3_end:
-    // tl:342: bytes approval_hash = sha256(chunk_hashes) [slot 39]
+    // tl:338: bytes approval_hash = sha256(chunk_hashes) [slot 39]
     load 37                                                 // chunk_hashes
     sha256
     store 39                                                // approval_hash
-    // tl:343: assert(approval_hash == version_box.approval_hash)
+    // tl:339: assert(approval_hash == version_box.approval_hash)
     load 39                                                 // approval_hash
     load 35; pushint 0; pushint 32; box_extract// version_box.approval_hash
     ==
     assert
-    // tl:344: return
+    // tl:340: return
     retsub
 
 
-// tl:348: func opt_in_to_asset_if_needed(asset_id: int) int:
+// tl:344: func opt_in_to_asset_if_needed(asset_id: int) int:
 __func__opt_in_to_asset_if_needed:
     store 40                                                // asset_id [int]
-    // tl:349: int is_opted_in [slot 41]
+    // tl:345: int is_opted_in [slot 41]
     
-    // tl:351: if asset_id:
+    // tl:347: if asset_id:
     load 40                                                 // asset_id
     bz l4_end
     // then:
-        // tl:352: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
+        // tl:348: is_opted_in, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, asset_id)
         global CurrentApplicationAddress
         load 40                                             // asset_id
         asset_holding_get AssetBalance
         store 41                                            // is_opted_in
         pop                                                 // discarding value for _
         
-        // tl:354: if is_opted_in == 0:
+        // tl:350: if is_opted_in == 0:
         load 41                                             // is_opted_in
         pushint 0
         ==
         bz l5_end
         // then:
-            // tl:355: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
+            // tl:351: transfer(asset_id, 0, Global.CurrentApplicationAddress, Global.CurrentApplicationAddress)
             load 40                                         // asset_id
             pushint 0
             global CurrentApplicationAddress
@@ -966,67 +951,67 @@ __func__opt_in_to_asset_if_needed:
             callsub __func__transfer
         l5_end:
     l4_end:
-    // tl:358: return !is_opted_in
+    // tl:354: return !is_opted_in
     load 41                                                 // is_opted_in
     !
     retsub
 
 
-// tl:362: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
+// tl:358: func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
 __func__transfer:
     store 42                                                // receiver [bytes]
     store 43                                                // sender [bytes]
     store 44                                                // amount [int]
     store 45                                                // asset_id [int]
-    // tl:363: if !asset_id:
+    // tl:359: if !asset_id:
     load 45                                                 // asset_id
     !
     bz l6_else
     // then:
-        // tl:364: inner_txn:
+        // tl:360: inner_txn:
         itxn_begin
-            // tl:365: TypeEnum: Pay
+            // tl:361: TypeEnum: Pay
             pushint 1                                       // Pay
             itxn_field TypeEnum
-            // tl:366: Sender: sender
+            // tl:362: Sender: sender
             load 43                                         // sender
             itxn_field Sender
-            // tl:367: Receiver: receiver
+            // tl:363: Receiver: receiver
             load 42                                         // receiver
             itxn_field Receiver
-            // tl:368: Amount: amount
+            // tl:364: Amount: amount
             load 44                                         // amount
             itxn_field Amount
-            // tl:369: Fee: 0
+            // tl:365: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
         b l6_end
     l6_else:
-    // tl:371: else:
-        // tl:372: inner_txn:
+    // tl:367: else:
+        // tl:368: inner_txn:
         itxn_begin
-            // tl:373: TypeEnum: Axfer
+            // tl:369: TypeEnum: Axfer
             pushint 4                                       // Axfer
             itxn_field TypeEnum
-            // tl:374: Sender: sender
+            // tl:370: Sender: sender
             load 43                                         // sender
             itxn_field Sender
-            // tl:375: AssetReceiver: receiver
+            // tl:371: AssetReceiver: receiver
             load 42                                         // receiver
             itxn_field AssetReceiver
-            // tl:376: AssetAmount: amount
+            // tl:372: AssetAmount: amount
             load 44                                         // amount
             itxn_field AssetAmount
-            // tl:377: XferAsset: asset_id
+            // tl:373: XferAsset: asset_id
             load 45                                         // asset_id
             itxn_field XferAsset
-            // tl:378: Fee: 0
+            // tl:374: Fee: 0
             pushint 0
             itxn_field Fee
         itxn_submit
         // end inner_txn
     l6_end:
-    // tl:381: return
+    // tl:377: return
     retsub
