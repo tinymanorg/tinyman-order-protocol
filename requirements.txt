@@ -1,4 +1,4 @@
 py-algorand-sdk==2.3.0
-git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
-git+https://github.com/Hipo/algojig.git@71a1bf83204fb70198850024306d91bd041da7d4
+git+https://github.com/tinymanorg/tealish.git@109a2f2e74549307fb002298f4189df3f0ed7c4f
+git+https://github.com/Hipo/algojig.git@c83a3439f87ab6497f567619e74ae35bed91eda3
 git+https://github.com/tinymanorg/tinyman-py-sdk.git

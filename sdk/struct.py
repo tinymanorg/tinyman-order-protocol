@@ -63,12 +63,14 @@ class Struct():
         self._name = name
         self._size = size
         self._fields = fields
+        self._data = None
 
     def __call__(self, data=None) -> Any:
         if data is None:
             data = bytearray(self._size)
-        self._data = memoryview(data)
-        return self
+        struct = Struct(self._name, self._size, self._fields)
+        struct._data = memoryview(data)
+        return struct
 
     def __getattribute__(self, name: str) -> Any:
         if name.startswith("_"):

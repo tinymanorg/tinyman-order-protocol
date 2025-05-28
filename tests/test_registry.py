@@ -6,14 +6,17 @@ from algosdk.account import generate_account
 from algosdk.encoding import decode_address, encode_address
 from algosdk.transaction import OnComplete
 
+from tinyman.swap_router.utils import encode_router_args
 from tinyman.utils import TransactionGroup
 
 from sdk.constants import *
 from sdk.client import RegistryClient
 from sdk.event import decode_logs
 from sdk.events import registry_events
+from sdk.structs import AppVersion
+from sdk.utils import calculate_approval_hash
 
-from tests.constants import registry_approval_program, registry_clear_state_program, WEEK, DAY, registry_app_global_schema, registry_app_local_schema, registry_app_extra_pages
+from tests.constants import registry_approval_program, registry_clear_state_program, WEEK, DAY, registry_app_global_schema, registry_app_local_schema, registry_app_extra_pages, order_approval_program
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -35,7 +38,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
                 sender=account_address,
                 sp=self.sp,
                 on_complete=OnComplete.NoOpOC,
-                app_args=[b"create_application", self.vault_app_id, decode_address(self.manager_address)],
+                app_args=[b"create_application", self.vault_app_id, self.router_app_id, decode_address(self.manager_address)],
                 approval_program=registry_approval_program.bytecode,
                 clear_program=registry_clear_state_program.bytecode,
                 global_schema=registry_app_global_schema,
@@ -55,9 +58,10 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
-                ORDER_FEE_RATE_KEY: 30,
-                GOVERNOR_ORDER_FEE_RATE_KEY: 15,
-                GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
+                ROUTER_APP_ID_KEY: self.router_app_id,
+                ORDER_FEE_RATE_KEY: 15,
+                GOVERNOR_ORDER_FEE_RATE_KEY: 10,
+                GOVERNOR_FEE_RATE_POWER_THRESHOLD: 2_000_000_000
             }
         )
 
@@ -66,6 +70,15 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
 
         now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Mock Approve a version
+        version = 1
+        key = b"v" + version.to_bytes(8, "big")
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+        struct = AppVersion()
+        struct.approval_hash = approval_hash
+        self.ledger.set_box(self.registry_app_id, key, struct._data)
+        self.ledger.global_states[self.registry_app_id][b"latest_version"] = version
 
         # Create Entry
         self.ledger.next_timestamp = now + DAY
@@ -108,6 +121,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
                 MANAGER_KEY: decode_address(self.manager_address),
                 PROPOSED_MANAGER_KEY: decode_address(user_1_client.user_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
@@ -130,6 +144,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
                 MANAGER_KEY: decode_address(user_1_client.user_address),
                 PROPOSED_MANAGER_KEY: None,
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
@@ -169,6 +184,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 50,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
@@ -196,6 +212,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 20,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
@@ -223,6 +240,7 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 2_000_000_000,
@@ -255,3 +273,93 @@ class OrderProtocolRegistryTests(OrderProtocolBaseTestCase):
         self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.registry_application_address))
         self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(self.manager_address))
         self.assertEqual(inner_txns[0][b'txn'][b'aamt'], 1000)
+
+    def test_user_opt_in(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+    def test_endorse(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+        # Endorse
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.endorse(self.user_address)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        endorse_txn = block_txns[0]
+
+        events = decode_logs(endorse_txn[b'dt'][b'lg'], registry_events)
+        endorse_event = events[0]
+
+        self.assertEqual(endorse_event['event_name'], 'endorse')
+        self.assertEqual(endorse_event['user_address'], self.user_address)
+
+        user_local_state = self.ledger.get_local_state(self.user_address, self.registry_app_id)
+        self.assertEqual(user_local_state[IS_ENDORSED_KEY], 1)
+
+    def test_deendorse(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # User Opt In
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.registry_user_opt_in()
+
+        # Endorse
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.endorse(self.user_address)
+
+        # Deendorse
+        self.ledger.next_timestamp = now + DAY + 2
+        self.manager_client.deendorse(self.user_address)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        endorse_txn = block_txns[0]
+
+        events = decode_logs(endorse_txn[b'dt'][b'lg'], registry_events)
+        deendorse_event = events[0]
+
+        self.assertEqual(deendorse_event['event_name'], 'deendorse')
+        self.assertEqual(deendorse_event['user_address'], self.user_address)
+
+        user_local_state = self.ledger.get_local_state(self.user_address, self.registry_app_id)
+        self.assertTrue(IS_ENDORSED_KEY not in user_local_state)
+
+    def test_approve_version(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        approval_hash = calculate_approval_hash(order_approval_program.bytecode)
+
+        # Approve Version
+        self.ledger.next_timestamp = now + DAY + 1
+        self.manager_client.approve_version(1, approval_hash)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        approve_version_txn = block_txns[1]
+
+        events = decode_logs(approve_version_txn[b'dt'][b'lg'], registry_events)
+        approve_version_event = events[0]
+
+        self.assertEqual(approve_version_event['version'], 1)
+        self.assertEqual(approve_version_event['approval_hash'], approval_hash)

@@ -11,7 +11,7 @@ from tinyman.governance.vault.constants import MAX_LOCK_TIME
 
 from sdk.constants import *
 from sdk.client import OrderingClient, RegistryClient
-from sdk.structs import Entry, Order
+from sdk.structs import Entry, TriggerOrder
 
 from tests.constants import *
 from tests.utils import JigAlgod
@@ -70,8 +70,15 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.set_account_balance(get_application_address(self.vault_app_id), 300_000)
         self.ledger.boxes[self.vault_app_id] = {}
 
+
+        # Set up router.
+        self.router_app_id = 1005
+        self.ledger.create_app(app_id=self.router_app_id, approval_program=router_mock_approval_program, creator=self.app_creator_address, local_ints=0, local_bytes=0, global_ints=0, global_bytes=0)
+        self.ledger.set_account_balance(get_application_address(self.router_app_id), 300_000)
+
+
         self.algod = JigAlgod(self.ledger)
-        self.ordering_client = OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.user_address, self.user_sk)
+        self.ordering_client = OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.router_app_id, self.user_address, self.user_sk)
         self.manager_client = RegistryClient(self.algod, self.registry_app_id, self.vault_app_id, self.manager_address, self.manager_sk)
 
     def create_registry_app(self, app_id, app_creator_address):
@@ -90,6 +97,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
             {
                 MANAGER_KEY: decode_address(self.manager_address),
                 VAULT_APP_ID_KEY: self.vault_app_id,
+                ROUTER_APP_ID_KEY: self.router_app_id,
                 ORDER_FEE_RATE_KEY: 30,
                 GOVERNOR_ORDER_FEE_RATE_KEY: 15,
                 GOVERNOR_FEE_RATE_POWER_THRESHOLD: 500_000_000,
@@ -103,6 +111,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.create_app(
             app_id=app_id,
             approval_program=order_approval_program,
+            extra_pages=3,
             creator=app_creator_address,
             local_ints=order_app_local_schema.num_uints,
             local_bytes=order_app_local_schema.num_byte_slices,
@@ -112,10 +121,11 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
 
         self.ledger.global_states[app_id] = {
             USER_ADDRESS_KEY: decode_address(app_creator_address),
-            MANAGER_KEY: decode_address(self.register_application_address),
             REGISTRY_APP_ID_KEY: self.registry_app_id,
             REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
             VAULT_APP_ID_KEY: self.vault_app_id,
+            ROUTER_APP_ID_KEY: self.router_app_id,
+            VERSION_KEY: 1,
         }
 
         # Register the app.
@@ -126,7 +136,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.set_box(self.registry_app_id, key=entry_box_name, value=entry._data)
         self.ledger.global_states[self.registry_app_id][ENTRY_COUNT_KEY] = self.ledger.global_states[self.registry_app_id].get(ENTRY_COUNT_KEY, 0) + 1
 
-        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.user_address, self.user_sk, self.app_id)
+        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.router_app_id, self.user_address, self.user_sk, self.app_id)
 
     def simulate_user_voting_power(self, account_address=None, locked_amount=510_000_000, lock_start_time = None, lock_end_time=None):
         """
@@ -145,7 +155,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
         self.ledger.set_box(self.vault_app_id, key=decode_address(account_address), value=account_state)
 
     def get_new_ordering_client(self, user_sk, user_address):
-        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, user_address, user_sk)
+        return OrderingClient(self.algod, self.registry_app_id, self.vault_app_id, self.router_app_id, user_address, user_sk)
 
     def get_new_registry_client(self, user_sk, user_address):
         return RegistryClient(self.algod, self.registry_app_id, self.vault_app_id, user_address, user_sk)

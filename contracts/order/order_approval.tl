@@ -1,5 +1,5 @@
 #pragma version 10
-#tealish version git+https://github.com/tinymanorg/tealish.git@d7441973671cf6b79dd55843016892f4b86ceeba
+#tealish version git+https://github.com/tinymanorg/tealish.git@109a2f2e74549307fb002298f4189df3f0ed7c4f
 
 # Tinyman Order Protocol
 # License: https://github.com/tinymanorg/tinyman-order-protocol/blob/main/LICENSE
@@ -7,12 +7,11 @@
 
 
 # Name: o<id>
-struct Order:
+struct TriggerOrder:
     asset_id: int
     amount: int
     target_asset_id: int
     target_amount: int
-    # Partial Filling.
     filled_amount: int
     collected_target_amount: int
     is_partial_allowed: int
@@ -22,103 +21,155 @@ struct Order:
 end
 
 
+# Name: r<id>
+struct RecurringOrder:
+    asset_id: int
+    # `amount` is per recurrence
+    amount: int
+    target_asset_id: int
+    collected_target_amount: int
+    min_target_amount: int
+    max_target_amount: int
+    remaining_recurrences: int
+    interval: int
+    fee_rate: int
+    last_fill_timestamp: int
+    creation_timestamp: int
+end
+
+
+struct Address:
+    address: bytes[32]
+end
+
+
 # Global State
 
 const bytes REGISTRY_APP_ID_KEY = "registry_app_id"
 const bytes REGISTRY_APP_ACCOUNT_ADDRESS_KEY = "registry_app_account_address"
 const bytes VAULT_APP_ID_KEY = "vault_app_id"
-const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
-const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
-const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
+const bytes ROUTER_APP_ID_KEY = "router_app_id"
 
 const bytes USER_ADDRESS_KEY = "user_address"
 const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
 
-const bytes PROPOSED_MANAGER_KEY = "proposed_manager"
-const bytes MANAGER_KEY = "manager"
+const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
+
+const bytes VERSION_KEY = "version"
+
+# Global State External
 
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
+const bytes GOVERNOR_ORDER_FEE_RATE_KEY = "governor_order_fee_rate"
+const bytes GOVERNOR_FEE_RATE_POWER_THRESHOLD = "governor_fee_rate_power_threshold"
+
+# Local State External
+
+const bytes IS_ENDORSED_KEY = "is_endorsed"
 
 # Math Constants
 
 const int RATE_SCALER = 18446744073709551615
 const int MAX_UINT64 = 18446744073709551615
+const int MINUTE = 60
+
+
+# Versioning
+
+# Update this value by one with each new version
+const int VERSION = 2
 
 
 router:
     create_application
     update_application
-    init
-    propose_manager
-    accept_manager
+    post_update
     asset_opt_in
-    put_order
-    cancel_order
-    start_execute_order
-    end_execute_order
+    put_trigger_order
+    cancel_trigger_order
+    start_execute_trigger_order
+    end_execute_trigger_order
+    put_recurring_order
+    cancel_recurring_order
+    execute_recurring_order
     collect
 end
 
 
 # Permission: anyone
 @public(OnCompletion=CreateApplication)
-func create_application(registry_app_id: int, vault_app_id: int, manager_address: bytes[32]):
+func create_application(registry_app_id: int):
     app_global_put(USER_ADDRESS_KEY, Txn.Sender)
-    app_global_put(MANAGER_KEY, manager_address)
 
     app_global_put(REGISTRY_APP_ID_KEY, registry_app_id)
     bytes registry_app_account_address 
     _, registry_app_account_address = app_params_get(AppAddress, registry_app_id)
     app_global_put(REGISTRY_APP_ACCOUNT_ADDRESS_KEY, registry_app_account_address)
+
+    int vault_app_id
+    _, vault_app_id = app_global_get_ex(registry_app_id, VAULT_APP_ID_KEY)
     app_global_put(VAULT_APP_ID_KEY, vault_app_id)
 
-    # create_application(user_address,registry_app_id,vault_app_id,manager_address)
-    log(ARC28Event("create_application(address,uint64,uint64,address)", Txn.Sender, itob(registry_app_id), itob(vault_app_id), manager_address))
+    int router_app_id
+    _, router_app_id = app_global_get_ex(registry_app_id, ROUTER_APP_ID_KEY)
+    app_global_put(ROUTER_APP_ID_KEY, router_app_id)
+
+    app_global_put(VERSION_KEY, VERSION)
+
+    # create_application(user_address,registry_app_id,vault_app_id)
+    log(ARC28Event("create_application(address,uint64,uint64)", Txn.Sender, itob(registry_app_id), itob(vault_app_id)))
     return
 end
 
 
-# TODO: Remove function for mainnet
+# Permission: user
 @public(OnCompletion=UpdateApplication)
-func update_application():
-    assert(Txn.Sender == app_global_get("manager"))
+func update_application(version: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    # Gtxn +1 must be a call to verify_update on the registry app
+    assert(Gtxn[+1].ApplicationID == app_global_get(REGISTRY_APP_ID_KEY))
+    assert(Gtxn[+1].ApplicationArgs[0] == "verify_update")
+    assert(Gtxn[+1].ApplicationArgs[1] == itob(version))
+
+    # Gtxn +2 must be a call to post_update on this app
+    assert(Gtxn[+2].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[+2].ApplicationArgs[0] == "post_update")
+
+    log(ARC28Event("update_application(address,uint64)", Txn.Sender, itob(version)))
     return
 end
 
 
-# Permission: manager
+# Permission: user
 @public()
-func init():
-    assert(Txn.Sender == app_global_get(MANAGER_KEY))
+func post_update():
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
 
-    log(ARC28Event("init()"))
+    # This will fail the update if the app is already at the same or higher version
+    assert(VERSION > app_global_get(VERSION_KEY))
+
+    # Update app ids to match registry
+    int registry_app_id = app_global_get(REGISTRY_APP_ID_KEY)
+
+    int vault_app_id
+    _, vault_app_id = app_global_get_ex(registry_app_id, VAULT_APP_ID_KEY)
+    app_global_put(VAULT_APP_ID_KEY, vault_app_id)
+
+    int router_app_id
+    _, router_app_id = app_global_get_ex(registry_app_id, ROUTER_APP_ID_KEY)
+    app_global_put(ROUTER_APP_ID_KEY, router_app_id)
+
+    # any version specific 'migrations' can be done here in future versions
+
+    # Always update the version number in global state
+    app_global_put(VERSION_KEY, VERSION)
+    log(ARC28Event("post_update(uint64)", itob(VERSION)))
     return
 end
 
-
-# permission: manager
-@public()
-func propose_manager(new_manager: bytes[32]):
-    assert(Txn.Sender == app_global_get(MANAGER_KEY))
-
-    app_global_put(PROPOSED_MANAGER_KEY, new_manager)
-    log(ARC28Event("propose_manager(address)", new_manager))
-    return
-end
-
-
-# The proposed manager must call this function to become the manager.
-# permission: proposed_manager
-@public()
-func accept_manager():
-    bytes proposed_manager = app_global_get(PROPOSED_MANAGER_KEY)
-    assert(Txn.Sender == proposed_manager)
-
-    app_global_put(MANAGER_KEY, proposed_manager)
-    app_global_put(PROPOSED_MANAGER_KEY, "")
-    log(ARC28Event("accept_manager(address)", proposed_manager))
-    return
-end
 
 
 @public()
@@ -140,12 +191,12 @@ end
 # Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
 # Permission: App owner (User)
 @public()
-func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
+func put_trigger_order(asset_id: int, amount: int, target_asset_id: int, target_amount: int, is_partial_allowed: int, duration: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
     int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
-    box<Order> order = CreateBox(Concat("o", itob(total_order_count)))
+    box<TriggerOrder> order = CreateBox(Concat("o", itob(total_order_count)))
 
     # Assertions
     assert(amount > 0)
@@ -185,8 +236,9 @@ func put_order(asset_id: int, amount: int, target_asset_id: int, target_amount: 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
-    log(ARC28Event("put_order(uint64)", itob(total_order_count)))
+    registry_emit_event("put_trigger_order", user_address, Concat(itob(total_order_count), order_data))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("put_trigger_order(uint64)", itob(total_order_count)))
 
     return
 end
@@ -196,11 +248,11 @@ end
 # Prerequisites: If partial filling is utilized, collect method must be called before.
 # Permission: App owner (User)
 @public()
-func cancel_order(order_id: int):
+func cancel_trigger_order(order_id: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
 
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     # It is assumed that the order is deleted once it is executed.
     # Send remaining amount back to user.
@@ -217,8 +269,9 @@ func cancel_order(order_id: int):
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("cancel_order(uint64)", itob(order_id)))
+    registry_emit_event("cancel_trigger_order", user_address, itob(order_id))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_trigger_order(uint64)", itob(order_id)))
 
     # Delete the box.
     _ = box_del(order)
@@ -227,12 +280,25 @@ func cancel_order(order_id: int):
 end
 
 
+func check_execute_order_txn(txn_index: int, method_name: bytes, order_id: int, fill_amount: int, index_diff: int):
+    assert(Gtxn[txn_index].Sender == Txn.Sender)
+    assert(Gtxn[txn_index].TypeEnum == Appl)
+    assert(Gtxn[txn_index].OnCompletion == NoOp)
+    assert(Gtxn[txn_index].ApplicationID == Global.CurrentApplicationID)
+    assert(Gtxn[txn_index].ApplicationArgs[0] == method_name)
+    assert(Gtxn[txn_index].ApplicationArgs[1] == itob(order_id))
+    assert(Gtxn[txn_index].ApplicationArgs[2] == itob(fill_amount))
+    assert(Gtxn[txn_index].ApplicationArgs[3] == itob(index_diff))
+    return
+end
+
+
 # Description: Method allows an executor (taker) to do arbitrary operations between `Txn.GroupIndex < i < (Txn.GroupIndex + index_diff)`.
-# An executor must call `end_execute_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
+# An executor must call `end_execute_trigger_order` at the `Txn.GroupIndex + index_diff` for the transaction group to succeed.
 # Permission: Everyone
 @public()
-func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+func start_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     # Assertions
     assert(index_diff >= 2)
@@ -249,49 +315,30 @@ func start_execute_order(order_id: int, fill_amount: int, index_diff: int):
     assert(Global.LatestTimestamp <= order.expiration_timestamp)
 
     int end_execute_order_txn_index = Txn.GroupIndex + index_diff
-    assert(Gtxn[end_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[end_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[end_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[0] == "end_execute_order")
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[end_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(end_execute_order_txn_index, "end_execute_trigger_order", order_id, fill_amount, index_diff)
 
     # Transfer `fill_amount` to executor.
     transfer(order.asset_id, fill_amount, Global.CurrentApplicationAddress, Txn.Sender)
 
     # Logs
-    log(ARC28Event("start_execute_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
+    log(ARC28Event("start_execute_trigger_order(address,uint64,address)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender))
 
     return
 end
 
 
-# Description: Method checks the validity of the execution between `start_execute_order` and `end_execute_order`.
+# Description: Method checks the validity of the execution between `start_execute_trigger_order` and `end_execute_trigger_order`.
 # An executor must return the correct amount of `target_asset_id` via an axfer at `Txn.GroupIndex - 1`. Otherwise the transaction group fails.
 # Permission: Everyone
 @public()
-func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
+func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
+    box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
-
-    # Assertions
-    assert(Gtxn[start_execute_order_txn_index].Sender == Txn.Sender)
-    assert(Gtxn[start_execute_order_txn_index].TypeEnum == Appl)
-    assert(Gtxn[start_execute_order_txn_index].OnCompletion == NoOp)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationID == Global.CurrentApplicationID)
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[0] == "start_execute_order")
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[1] == itob(order_id))
-    # Parameters `fill_amount` and `index_diff` must be the same.
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[2] == itob(fill_amount))
-    assert(Gtxn[start_execute_order_txn_index].ApplicationArgs[3] == itob(index_diff))
+    check_execute_order_txn(start_execute_order_txn_index, "start_execute_trigger_order", order_id, fill_amount, index_diff)
 
     # Assert that user received the target amount or more.
-    # TODO: Review the calculations.
     int minimum_amount
     if !order.is_partial_allowed:
         minimum_amount = order.target_amount
@@ -302,22 +349,25 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, minimum_amount)
 
     order.filled_amount = order.filled_amount + fill_amount
-    order.collected_target_amount = order.collected_target_amount + received_amount
+
+    # Calculate the amount after feeing.
+    int fee_amount = calculate_fee_amount(received_amount, order.fee_rate)
+    assert(fee_amount)
+
+    order.collected_target_amount = order.collected_target_amount + (received_amount - fee_amount)
 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("end_execute_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
+    registry_emit_event("update_trigger_order", user_address, Concat(itob(order_id), order_data))
+    log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("end_execute_trigger_order(address,uint64,address,uint64,uint64)", app_global_get(USER_ADDRESS_KEY), itob(order_id), Txn.Sender, itob(fill_amount), itob(received_amount)))
 
-    # If all amount is filled, send the collected_target_amount to user, send the fee_amount to registry app, delete the order.
-    # If partial filling is not allowed `collected_target_amount` >= `target_amount` == `received_amount`.
-    # If partial filling is allowed, and user has collected partial fills beforehand, `collected_target_amount` < `target_amount`.
+    # Transfers
+    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+
     if order.amount == order.filled_amount:
-        int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
-
-        transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-        transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+        transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
 
@@ -325,28 +375,229 @@ func end_execute_order(order_id: int, fill_amount: int, index_diff: int):
 end
 
 
+# Description: Collect the accumulated amount for an order
+# Permission: App owner (User)
 @public()
-func collect(order_id: int):
+func collect(order_id: int, order_type: bytes[1]):
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     assert(Txn.Sender == user_address)
-    box<Order> order = OpenBox(Concat("o", itob(order_id)))
 
-    assert(order.collected_target_amount)
+    int target_asset_id
+    int collected_target_amount
 
-    int fee_amount = calculate_fee_amount(order.collected_target_amount, order.fee_rate)
-    assert(fee_amount)
+    if order_type == "o":
+        box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
+        target_asset_id = order.target_asset_id
+        collected_target_amount = order.collected_target_amount
 
-    transfer(order.target_asset_id, (order.collected_target_amount - fee_amount), Global.CurrentApplicationAddress, user_address)
-    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+        order.collected_target_amount = 0
 
-    int collected_target_amount = order.collected_target_amount
+        bytes order_data
+        _, order_data = box_get(order)
+        log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+
+    elif order_type == "r":
+        box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id)))
+        target_asset_id = recurring_order.target_asset_id
+        collected_target_amount = recurring_order.collected_target_amount
+
+        recurring_order.collected_target_amount = 0
+
+        bytes recurring_order_data
+        _, recurring_order_data = box_get(recurring_order)
+        log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), recurring_order_data))
+    else:
+        exit(1)
+    end
+
+    assert(collected_target_amount)
+
+    transfer(target_asset_id, collected_target_amount, Global.CurrentApplicationAddress, user_address)
+
+    # Logs
+    log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
+
+    return
+end
+
+
+# Description: Create a recurring order with the monotonically incremented ORDER_COUNT as id.
+# Prerequisites: App should be opted into both `asset_id` and `target_asset_id`. Only `target_asset_id` optin checked explicitly.
+# Permission: App owner (User)
+@public()
+func put_recurring_order(asset_id: int, amount: int, target_asset_id: int, min_target_amount: int, max_target_amount: int, target_recurrence: int, interval: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    int total_order_count = app_global_get(TOTAL_ORDER_COUNT_KEY)
+    box<RecurringOrder> order = CreateBox(Concat("r", itob(total_order_count)))
+
+    # Assertions
+    assert(amount > 0)
+    assert(asset_id != target_asset_id)
+    assert(target_recurrence > 0)
+    assert(interval >= MINUTE)
+    # `interval` must be divisible by minute
+    assert(!(interval % MINUTE))
+
+    if !max_target_amount:
+        max_target_amount = MAX_UINT64
+    end
+    assert(min_target_amount <= max_target_amount)
+
+    # Optin to target asset if necessary
+    if target_asset_id:
+        int is_opted_in_to_target
+        is_opted_in_to_target, _ = asset_holding_get(AssetBalance, Global.CurrentApplicationAddress, target_asset_id)
+        assert(is_opted_in_to_target)
+    end
+
+    check_received_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, asset_id, (amount * target_recurrence))
+
+    int fee_rate = get_fee_rate()
+
+    order.asset_id = asset_id
+    order.amount = amount
+    order.target_asset_id = target_asset_id
     order.collected_target_amount = 0
+    order.min_target_amount = min_target_amount
+    order.max_target_amount = max_target_amount
+    order.remaining_recurrences = target_recurrence
+    order.interval = interval
+    order.fee_rate = fee_rate
+    order.last_fill_timestamp = 0
+    order.creation_timestamp = Global.LatestTimestamp
+
+    app_global_put(TOTAL_ORDER_COUNT_KEY, total_order_count + 1)
 
     # Logs
     bytes order_data
     _, order_data = box_get(order)
-    log(ARC28Event("order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
-    log(ARC28Event("collect(uint64,uint64)", itob(order_id), itob(collected_target_amount)))
+    registry_emit_event("put_recurring_order", user_address, Concat(itob(total_order_count), order_data))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(total_order_count), order_data))
+    log(ARC28Event("put_recurring_order(uint64)", itob(total_order_count)))
+
+    return
+end
+
+
+# Description: Send the `amount` (or `amount - filled_amount` if partially filled) to the user. Delete the order box.
+# Prerequisites: If the order is partially filled, the collect method must be called before cancelling.
+# Permission: App owner (User)
+@public()
+func cancel_recurring_order(order_id: int):
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+    assert(Txn.Sender == user_address)
+
+    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+
+    # Ensure there is no remaining amount to be collected
+    assert(!order.collected_target_amount)
+
+    # It is assumed that the order is deleted once it is executed
+    # Send remaining amount back to user
+    int remaining_amount = order.amount * order.remaining_recurrences
+
+    transfer(order.asset_id, remaining_amount, Global.CurrentApplicationAddress, user_address)
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    registry_emit_event("cancel_recurring_order", user_address, itob(order_id))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("cancel_recurring_order(uint64)", itob(order_id)))
+
+    # Delete the box
+    _ = box_del(order)
+
+    return
+end
+
+
+# Description: Method allows an authorised filler to execute a recurring order using the Tinyman Router
+# Permission: Filler
+@public()
+func execute_recurring_order(order_id: int, route: int[8], pools: Address[8], swaps: int):
+    box<RecurringOrder> order = OpenBox(Concat("r", itob(order_id)))
+    bytes user_address = app_global_get(USER_ADDRESS_KEY)
+
+    # Assert this txn is not in an atomic sandwich
+    assert(Txn.GroupIndex == 0)
+    assert(Global.CallerApplicationID == 0)
+
+    # Assert that Txn.Sender is allowed to fill recurring orders.
+    check_is_endorsed(Txn.Sender)
+
+    assert(Global.LatestTimestamp >= (order.last_fill_timestamp + order.interval))
+
+    # Validate the supplied route
+    assert(route[0] == order.asset_id)
+    assert(route[swaps] == order.target_asset_id)
+
+    # Swap through the Tinyman Router using the supplied route
+    int received_amount = do_router_swap(order.amount, order.min_target_amount, route, pools, swaps)
+
+    # Assert that the received amount is within expected range.
+    assert((received_amount >= order.min_target_amount) && (received_amount <= order.max_target_amount))
+
+    # Calculate the amount after fees.
+    int fee_amount = calculate_fee_amount(received_amount, order.fee_rate)
+    assert(fee_amount)
+
+    # Update order
+    order.remaining_recurrences = order.remaining_recurrences - 1
+    order.last_fill_timestamp = Global.LatestTimestamp
+    order.collected_target_amount = order.collected_target_amount + (received_amount - fee_amount)
+
+    # Logs
+    bytes order_data
+    _, order_data = box_get(order)
+    registry_emit_event("update_recurring_order", user_address, Concat(itob(order_id), order_data))
+    log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
+    log(ARC28Event("execute_recurring_order(address,uint64,address,uint64,uint64)", user_address, itob(order_id), Txn.Sender, itob(order.amount), itob(received_amount)))
+
+    # Transfer fee to registry app account
+    transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
+
+    # If no more recurrences, transfer accumulated amount to the user address and close the order
+    if !order.remaining_recurrences:
+        transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
+        _ = box_del(order)
+    end
+
+    return
+end
+
+
+func do_router_swap(input_amount: int, output_amount: int, route: int[8], pools: Address[8], swaps: int) int:
+    bytes router_app_address
+    _, router_app_address = app_params_get(AppAddress, app_global_get(ROUTER_APP_ID_KEY))
+    int output_asset_id = route[swaps]
+    int initial_balance = get_balance(Global.CurrentApplicationAddress, output_asset_id)
+    inner_group:
+        transfer(route[0], input_amount, Global.CurrentApplicationAddress, router_app_address)
+        inner_txn:
+            TypeEnum: Appl
+            Fee: 0
+            ApplicationID: app_global_get(ROUTER_APP_ID_KEY)
+            ApplicationArgs[0]: "swap"
+            ApplicationArgs[1]: itob(input_amount)
+            ApplicationArgs[2]: itob(output_amount)
+            ApplicationArgs[3]: route
+            ApplicationArgs[4]: pools
+            ApplicationArgs[5]: itob(swaps)
+        end
+    end
+    int received_amount = get_balance(Global.CurrentApplicationAddress, output_asset_id) - initial_balance
+    return received_amount
+end
+
+
+func check_is_endorsed(user_address: bytes[32]):
+    int is_endorsed
+
+    _, is_endorsed = app_local_get_ex(user_address, app_global_get(REGISTRY_APP_ID_KEY), IS_ENDORSED_KEY)
+    assert(is_endorsed)
 
     return
 end
@@ -360,7 +611,7 @@ end
 
 
 func calculate_fee_amount(target_amount: int, fee_rate: int) int:
-    int fee_amount = (target_amount * fee_rate) / 10000
+    int fee_amount = btoi((itob(target_amount) b* itob(fee_rate)) b/ itob(10000))
     return fee_amount
 end
 
@@ -469,3 +720,27 @@ func transfer(asset_id: int, amount: int, sender: bytes, receiver: bytes):
     return
 end
 
+
+func registry_emit_event(event_name: bytes, user_address: bytes, data: bytes):
+    inner_txn:
+        TypeEnum: Appl
+        Fee: 0
+        ApplicationID: app_global_get(REGISTRY_APP_ID_KEY)
+        ApplicationArgs[0]: "emit_event"
+        ApplicationArgs[1]: event_name
+        ApplicationArgs[2]: user_address
+        ApplicationArgs[3]: data
+    end
+    return
+end
+
+
+func get_balance(account_address: bytes, asset_id: int) int:
+    int balance = 0
+    if !asset_id:
+        balance = balance(account_address) - min_balance(account_address)
+    else:
+        _, balance = asset_holding_get(AssetBalance, account_address, asset_id)
+    end
+    return balance
+end

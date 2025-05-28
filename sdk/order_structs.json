@@ -1,6 +1,6 @@
 {
   "structs": {
-    "Order": {
+    "TriggerOrder": {
       "size": 80,
       "fields": {
         "asset_id": {
@@ -52,6 +52,66 @@
           "type": "int",
           "size": 8,
           "offset": 72
+        }
+      }
+    },
+    "RecurringOrder": {
+      "size": 88,
+      "fields": {
+        "asset_id": {
+          "type": "int",
+          "size": 8,
+          "offset": 0
+        },
+        "amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 8
+        },
+        "target_asset_id": {
+          "type": "int",
+          "size": 8,
+          "offset": 16
+        },
+        "collected_target_amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 24
+        },
+        "min_target_amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 32
+        },
+        "max_target_amount": {
+          "type": "int",
+          "size": 8,
+          "offset": 40
+        },
+        "remaining_recurrences": {
+          "type": "int",
+          "size": 8,
+          "offset": 48
+        },
+        "interval": {
+          "type": "int",
+          "size": 8,
+          "offset": 56
+        },
+        "fee_rate": {
+          "type": "int",
+          "size": 8,
+          "offset": 64
+        },
+        "last_fill_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 72
+        },
+        "creation_timestamp": {
+          "type": "int",
+          "size": 8,
+          "offset": 80
         }
       }
     }
