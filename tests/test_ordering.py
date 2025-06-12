@@ -976,6 +976,156 @@ class ExecuteTriggerOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
+    def test_execute_order_successful_user_not_opted_in(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=100_000,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=15_000,
+            is_partial_allowed=False,
+            duration=4 * WEEK
+        )
+
+        # Execute Trigger Order
+        # Simulate Swap by sending the `target_amount` from filler account.
+        fill_amount = 100_000
+        bought_amount = 15_000
+        fee_rate = 30
+        fee_amount = int((bought_amount * fee_rate) / 10_000)
+        collected_target_amount = bought_amount - fee_amount
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+
+        sp = filler_client.get_suggested_params()
+        transactions = [
+            filler_client.prepare_start_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_amount,
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+        ]
+
+        self.ledger.next_timestamp = now + DAY + 1
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        filler_client._submit(transactions, additional_fees=4)
+
+        block = self.ledger.last_block
+        block_txns = block[b'txns']
+        start_execute_txn = block_txns[0]
+        end_execute_txn = block_txns[2]
+
+        events = decode_logs(start_execute_txn[b'dt'][b'lg'], ordering_events)
+        self.assertEqual(len(events), 1)
+        start_execute_order_event = events[0]
+
+        self.assertEqual(start_execute_order_event['order_id'], 0)
+        self.assertEqual(start_execute_order_event['filler_address'], filler_client.user_address)
+
+        events = decode_logs(end_execute_txn[b'dt'][b'lg'], ordering_events)
+        self.assertEqual(len(events), 2)
+        order_event = events[0]
+        end_execute_order_event = events[1]
+
+        self.assertEqual(order_event['user_address'], self.user_address)
+        self.assertEqual(order_event['order_id'], 0)
+        self.assertEqual(order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(order_event['amount'], 100_000)
+        self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(order_event['target_amount'], 15_000)
+        self.assertEqual(order_event['filled_amount'], 100_000)
+        self.assertEqual(order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(order_event['is_partial_allowed'], 0)
+        self.assertEqual(order_event['fee_rate'], 30)
+        self.assertEqual(order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
+
+        self.assertEqual(end_execute_order_event['user_address'], self.user_address)
+        self.assertEqual(end_execute_order_event['order_id'], 0)
+        self.assertEqual(end_execute_order_event['filler_address'], filler_client.user_address)
+        self.assertEqual(end_execute_order_event['fill_amount'], fill_amount)
+        self.assertEqual(end_execute_order_event['bought_amount'], bought_amount)
+
+        order = self.ordering_client.get_box(self.ordering_client.get_order_box_name(0), "TriggerOrder")
+        self.assertEqual(order.asset_id, self.talgo_asset_id)
+        self.assertEqual(order.amount, 100_000)
+        self.assertEqual(order.target_asset_id, self.tiny_asset_id)
+        self.assertEqual(order.target_amount, 15_000)
+        self.assertEqual(order.filled_amount, 100_000)
+        self.assertEqual(order.collected_target_amount, collected_target_amount)
+        self.assertEqual(order.is_partial_allowed, 0)
+        self.assertEqual(order.fee_rate, 30)
+        self.assertEqual(order.creation_timestamp, now + DAY)
+        self.assertEqual(order.expiration_timestamp, now + DAY + 4 * WEEK)
+
+        inner_txns = start_execute_txn[b'dt'][b'itx']
+
+        self.assertEqual(len(inner_txns), 1)
+        self.assertEqual(inner_txns[0][b'txn'][b'type'], b'axfer')
+        self.assertEqual(inner_txns[0][b'txn'][b'xaid'], self.talgo_asset_id)
+        self.assertEqual(inner_txns[0][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
+        self.assertEqual(inner_txns[0][b'txn'][b'arcv'], decode_address(filler_client.user_address))
+        self.assertEqual(inner_txns[0][b'txn'][b'aamt'], fill_amount)
+
+        inner_txns = end_execute_txn[b'dt'][b'itx']
+
+        # The amount isn't send to user because it wasn't opted in.
+        self.assertEqual(len(inner_txns), 2)
+        self.assertEqual(inner_txns[1][b'txn'][b'type'], b'axfer')
+        self.assertEqual(inner_txns[1][b'txn'][b'xaid'], self.tiny_asset_id)
+        self.assertEqual(inner_txns[1][b'txn'][b'snd'], decode_address(self.ordering_client.application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'arcv'], decode_address(self.ordering_client.registry_application_address))
+        self.assertEqual(inner_txns[1][b'txn'][b'aamt'], fee_amount)
+
+        events = decode_logs(inner_txns[0][b'dt'][b'lg'], registry_events)
+        self.assertEqual(len(events), 1)
+        order_event = events[0]
+        self.assertEqual(order_event['order_app_id'], self.ordering_client.app_id)
+        self.assertEqual(order_event['order_id'], 0)
+        self.assertEqual(order_event['asset_id'], self.talgo_asset_id)
+        self.assertEqual(order_event['amount'], 100_000)
+        self.assertEqual(order_event['target_asset_id'], self.tiny_asset_id)
+        self.assertEqual(order_event['target_amount'], 15_000)
+        self.assertEqual(order_event['filled_amount'], 100_000)
+        self.assertEqual(order_event['collected_target_amount'], collected_target_amount)
+        self.assertEqual(order_event['is_partial_allowed'], 0)
+        self.assertEqual(order_event['fee_rate'], 30)
+        self.assertEqual(order_event['creation_timestamp'], now + DAY)
+        self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
+
     def test_execute_order_partial_successful(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
