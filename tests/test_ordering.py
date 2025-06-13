@@ -14,7 +14,7 @@ from sdk.event import decode_logs
 from sdk.events import ordering_events, registry_events
 from sdk.structs import AppVersion, RecurringOrder, TriggerOrder
 from sdk.utils import calculate_approval_hash
-from tests.constants import order_approval_program, WEEK, DAY, MAX_UINT64
+from tests.constants import order_approval_program, WEEK, DAY, MAX_UINT64, CURRENT_VERSION
 from tests.core import OrderProtocolBaseTestCase
 
 
@@ -33,7 +33,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
 
         now = int(datetime.now(tz=timezone.utc).timestamp())
 
-        version = 2
+        version = CURRENT_VERSION
         key = b"v" + version.to_bytes(8, "big")
         approval_hash = calculate_approval_hash(order_approval_program.bytecode)
         struct = AppVersion()
@@ -88,7 +88,7 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         approval_program.compile()
         update_bytecode = approval_program.bytecode
 
-        version = 2
+        version = CURRENT_VERSION
         key = b"v" + version.to_bytes(8, "big")
         approval_hash = calculate_approval_hash(update_bytecode)
         struct = AppVersion()
@@ -109,16 +109,16 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         update_application_event = events[0]
 
         self.assertEqual(update_application_event["user_address"], self.user_address)
-        self.assertEqual(update_application_event["version"], 2)
+        self.assertEqual(update_application_event["version"], CURRENT_VERSION)
 
         events = decode_logs(verify_update_txn[b'dt'][b'lg'], registry_events)
         emited_event = events[0]
 
         self.assertEqual(emited_event['event_name'], 'update_ordering_application')
         self.assertEqual(emited_event['order_app_id'], self.app_id)
-        self.assertEqual(emited_event['version'], 2)
+        self.assertEqual(emited_event['version'], CURRENT_VERSION)
 
-        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 2)
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], CURRENT_VERSION)
 
 
 class PutTriggerOrderTests(OrderProtocolBaseTestCase):

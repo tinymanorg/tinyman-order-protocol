@@ -24,10 +24,10 @@ registry_app_global_schema = transaction.StateSchema(num_uints=16, num_byte_slic
 registry_app_local_schema = transaction.StateSchema(num_uints=8, num_byte_slices=8)
 registry_app_extra_pages = 3
 
+MAY_1 = int(datetime(2024, 5, 1, tzinfo=timezone.utc).timestamp())
 
 DAY = 86400
 WEEK = DAY * 7
-
-MAY_1 = int(datetime(2024, 5, 1, tzinfo=timezone.utc).timestamp())
-
 MAX_UINT64 = 18446744073709551615
+
+CURRENT_VERSION = 3
