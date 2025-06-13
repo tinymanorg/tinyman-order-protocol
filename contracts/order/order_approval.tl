@@ -366,7 +366,12 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
     # Transfers
     transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
-    if order.amount == order.filled_amount:
+    int is_opted_in_to_target = 1
+    if order.target_asset_id:
+        is_opted_in_to_target, _ = asset_holding_get(AssetBalance, user_address, order.target_asset_id)
+    end
+
+    if (order.amount == order.filled_amount) && is_opted_in_to_target:
         transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
@@ -559,8 +564,13 @@ func execute_recurring_order(order_id: int, route: int[8], pools: Address[8], sw
     # Transfer fee to registry app account
     transfer(order.target_asset_id, fee_amount, Global.CurrentApplicationAddress, app_global_get(REGISTRY_APP_ACCOUNT_ADDRESS_KEY))
 
+    int is_opted_in_to_target = 1
+    if order.target_asset_id:
+        is_opted_in_to_target, _ = asset_holding_get(AssetBalance, user_address, order.target_asset_id)
+    end
+
     # If no more recurrences, transfer accumulated amount to the user address and close the order
-    if !order.remaining_recurrences:
+    if !order.remaining_recurrences && is_opted_in_to_target:
         transfer(order.target_asset_id, order.collected_target_amount, Global.CurrentApplicationAddress, user_address)
         _ = box_del(order)
     end
