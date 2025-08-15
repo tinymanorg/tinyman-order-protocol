@@ -80,15 +80,15 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         self.ordering_client = self.create_order_app(self.app_id, self.user_address)
         self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
 
-        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], 1)
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], CURRENT_VERSION)
 
         # Mock Approve a version
         approval_program = TealishProgram('contracts/order/order_approval.tl')
-        approval_program.tealish_source = approval_program.tealish_source.replace("VERSION = 1", "VERSION = 2")
+        approval_program.tealish_source = approval_program.tealish_source.replace(f"VERSION = {CURRENT_VERSION}", f"VERSION = {CURRENT_VERSION + 1}")
         approval_program.compile()
         update_bytecode = approval_program.bytecode
 
-        version = CURRENT_VERSION
+        version = CURRENT_VERSION + 1
         key = b"v" + version.to_bytes(8, "big")
         approval_hash = calculate_approval_hash(update_bytecode)
         struct = AppVersion()
@@ -109,16 +109,16 @@ class OrderProtocolTests(OrderProtocolBaseTestCase):
         update_application_event = events[0]
 
         self.assertEqual(update_application_event["user_address"], self.user_address)
-        self.assertEqual(update_application_event["version"], CURRENT_VERSION)
+        self.assertEqual(update_application_event["version"], CURRENT_VERSION + 1)
 
         events = decode_logs(verify_update_txn[b'dt'][b'lg'], registry_events)
         emited_event = events[0]
 
         self.assertEqual(emited_event['event_name'], 'update_ordering_application')
         self.assertEqual(emited_event['order_app_id'], self.app_id)
-        self.assertEqual(emited_event['version'], CURRENT_VERSION)
+        self.assertEqual(emited_event['version'], CURRENT_VERSION + 1)
 
-        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], CURRENT_VERSION)
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"version"], CURRENT_VERSION + 1)
 
 
 class PutTriggerOrderTests(OrderProtocolBaseTestCase):

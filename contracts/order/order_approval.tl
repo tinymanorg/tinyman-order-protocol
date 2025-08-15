@@ -79,7 +79,7 @@ const int MINUTE = 60
 # Versioning
 
 # Update this value by one with each new version
-const int VERSION = 3
+const int VERSION = 4
 
 
 router:

@@ -50,7 +50,7 @@
 // Versioning
 
 // Update this value by one with each new version
-#define VERSION 3
+#define VERSION 4
 
 
 // tl:85: router:
@@ -199,7 +199,7 @@ __func__create_application:
     
     // tl:119: app_global_put(VERSION_KEY, VERSION)
     pushbytes VERSION_KEY                                   // "version"
-    pushint VERSION                                         // 3
+    pushint VERSION                                         // 4
     app_global_put
     
     // create_application(user_address,registry_app_id,vault_app_id)
@@ -305,7 +305,7 @@ __func__post_update:
     
     // This will fail the update if the app is already at the same or higher version
     // tl:154: assert(VERSION > app_global_get(VERSION_KEY))
-    pushint VERSION                                         // 3
+    pushint VERSION                                         // 4
     pushbytes VERSION_KEY                                   // "version"
     app_global_get
     >
@@ -346,11 +346,11 @@ __func__post_update:
     // Always update the version number in global state
     // tl:170: app_global_put(VERSION_KEY, VERSION)
     pushbytes VERSION_KEY                                   // "version"
-    pushint VERSION                                         // 3
+    pushint VERSION                                         // 4
     app_global_put
     // tl:171: log(ARC28Event("post_update(uint64)", itob(VERSION)))
     pushbytes 0xfca63cfe                                    // SHA512_256("post_update(uint64)")[:4]
-    pushint VERSION                                         // 3
+    pushint VERSION                                         // 4
     itob
     concat
     log

@@ -125,7 +125,7 @@ class OrderProtocolBaseTestCase(unittest.TestCase):
             REGISTRY_APP_ACCOUNT_ADDRESS_KEY: decode_address(self.register_application_address),
             VAULT_APP_ID_KEY: self.vault_app_id,
             ROUTER_APP_ID_KEY: self.router_app_id,
-            VERSION_KEY: 1,
+            VERSION_KEY: CURRENT_VERSION,
         }
 
         # Register the app.
