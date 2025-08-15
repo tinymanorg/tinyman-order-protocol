@@ -277,6 +277,10 @@ func emit_event(event_name: bytes, user_address: bytes, data: bytes):
     if event_name == "put_trigger_order":
         event = ARC28Event("put_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
     elif event_name == "update_trigger_order":
+        int app_version
+        _, app_version = app_global_get_ex(app_id, "version")
+        # 2025-08-15 Only allow execution of trigger orders on apps with version >= 4
+        assert(app_version >= 4)
         event = ARC28Event("update_trigger_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", itob(app_id), data)
     elif event_name == "cancel_trigger_order":
         event = ARC28Event("cancel_trigger_order(uint64,uint64)", itob(app_id), data)
