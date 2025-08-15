@@ -55,6 +55,8 @@ const bytes TOTAL_ORDER_COUNT_KEY = "order_count"
 
 const bytes ORDER_FEE_RATE_KEY = "order_fee_rate"
 
+const bytes EXECUTE_TRIGGER_MUTEX_KEY = "execute_trigger_mutex_key"
+
 const bytes VERSION_KEY = "version"
 
 # Global State External
@@ -300,6 +302,9 @@ end
 func start_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int):
     box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
+    assert(!app_global_get(EXECUTE_TRIGGER_MUTEX_KEY))
+    app_global_put(EXECUTE_TRIGGER_MUTEX_KEY, 1)
+
     # Assertions
     assert(index_diff >= 2)
 
@@ -335,6 +340,8 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
     bytes user_address = app_global_get(USER_ADDRESS_KEY)
     box<TriggerOrder> order = OpenBox(Concat("o", itob(order_id)))
 
+    app_global_put(EXECUTE_TRIGGER_MUTEX_KEY, 0)
+
     int start_execute_order_txn_index = Txn.GroupIndex - index_diff
     check_execute_order_txn(start_execute_order_txn_index, "start_execute_trigger_order", order_id, fill_amount, index_diff)
 
@@ -348,6 +355,13 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
 
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, minimum_amount)
 
+    int remaining_amount = order.amount
+    if order.is_partial_allowed:
+        remaining_amount = remaining_amount - order.filled_amount
+        assert(fill_amount <= remaining_amount)
+    else:
+        assert(fill_amount == remaining_amount)
+    end
     order.filled_amount = order.filled_amount + fill_amount
 
     # Calculate the amount after feeing.

@@ -976,6 +976,8 @@ class ExecuteTriggerOrderTests(OrderProtocolBaseTestCase):
         self.assertEqual(order_event['creation_timestamp'], now + DAY)
         self.assertEqual(order_event['expiration_timestamp'], now + DAY + 4 * WEEK)
 
+        self.assertEqual(self.ledger.get_global_state(self.app_id)[b"execute_trigger_mutex_key"], 0)
+
     def test_execute_order_successful_user_not_opted_in(self):
         self.create_registry_app(self.registry_app_id, self.app_creator_address)
         self.ledger.set_account_balance(self.register_application_address, 10_000_000)
@@ -1573,6 +1575,102 @@ class ExecuteTriggerOrderTests(OrderProtocolBaseTestCase):
         with self.assertRaises(LogicEvalError) as e:
             filler_client._submit(transactions, additional_fees=4)
         self.assertEqual(e.exception.source['line'], 'assert(Global.LatestTimestamp <= order.expiration_timestamp)')
+
+    def test_nested_execute_fail(self):
+        self.create_registry_app(self.registry_app_id, self.app_creator_address)
+        self.ledger.set_account_balance(self.register_application_address, 10_000_000)
+
+        now = int(datetime.now(tz=timezone.utc).timestamp())
+
+        # Create order app for user.
+        self.ordering_client = self.create_order_app(self.app_id, self.user_address)
+        self.ledger.set_account_balance(self.ordering_client.application_address, 10_000_000)
+
+        # Put Trigger Order
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.tiny_asset_id)
+        self.ledger.opt_in_asset(self.ordering_client.application_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(self.user_address, 100_000, self.talgo_asset_id)
+
+        amount = 100_000
+        target_amount = 15_000
+        self.ledger.next_timestamp = now + DAY
+        self.ordering_client.put_trigger_order(
+            asset_id=self.talgo_asset_id,
+            amount=amount,
+            target_asset_id=self.tiny_asset_id,
+            target_amount=target_amount,
+            is_partial_allowed=True,
+            duration=4 * WEEK
+        )
+
+        # Execute Trigger Order
+        # Fail at mutex.
+        # Simulate Swap by sending the `target_amount` from filler account.
+        fill_amount = amount - 1
+        bought_amount = int((target_amount / amount) * fill_amount)
+        fee_rate = 30
+        fee_amount = int((bought_amount * fee_rate) / 10_000)
+        collected_target_amount = bought_amount - fee_amount
+        filler_client = self.get_new_user_client()
+        self.ledger.opt_in_asset(filler_client.user_address, self.talgo_asset_id)
+        self.ledger.set_account_balance(filler_client.user_address, 15_000, self.tiny_asset_id)
+
+        sp = filler_client.get_suggested_params()
+        transactions = [
+            filler_client.prepare_start_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=5,
+                sp=sp
+            ),
+            filler_client.prepare_start_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_amount,
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=2,
+                sp=sp
+            ),
+            transaction.AssetTransferTxn(
+                sender=filler_client.user_address,
+                sp=sp,
+                receiver=self.ordering_client.application_address,
+                amt=bought_amount,
+                index=self.tiny_asset_id
+            ),
+            filler_client.prepare_end_execute_trigger_order_transaction(
+                order_app_id=self.ordering_client.app_id,
+                order_id=0,
+                account_address=self.ordering_client.user_address,
+                fill_amount=fill_amount,
+                index_diff=5,
+                sp=sp
+            ),
+        ]
+
+        self.ledger.next_timestamp = now + DAY + 1
+        self.ledger.opt_in_asset(self.ordering_client.registry_application_address, self.tiny_asset_id)  # TODO: Move this optin to client.
+        self.ledger.opt_in_asset(self.ordering_client.user_address, self.tiny_asset_id)  # TODO: Also add this to client.
+        with self.assertRaises(LogicEvalError) as e:
+            filler_client._submit(transactions, additional_fees=8)
+        self.assertEqual(e.exception.source['line'], 'assert(!app_global_get(EXECUTE_TRIGGER_MUTEX_KEY))')
 
 
 class PutRecurringOrderTests(OrderProtocolBaseTestCase):
