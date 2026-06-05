@@ -410,6 +410,11 @@ func collect(order_id: int, order_type: bytes[1]):
         _, order_data = box_get(order)
         log(ARC28Event("trigger_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), order_data))
 
+        # Delete the box if the order is complete
+        if order.amount == order.filled_amount:
+            _ = box_del(order)
+        end
+
     elif order_type == "r":
         box<RecurringOrder> recurring_order = OpenBox(Concat("r", itob(order_id)))
         target_asset_id = recurring_order.target_asset_id
@@ -420,6 +425,11 @@ func collect(order_id: int, order_type: bytes[1]):
         bytes recurring_order_data
         _, recurring_order_data = box_get(recurring_order)
         log(ARC28Event("recurring_order(address,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", user_address, itob(order_id), recurring_order_data))
+
+        # Delete the box if the order is complete
+        if !recurring_order.remaining_recurrences:
+            _ = box_del(recurring_order)
+        end
     else:
         exit(1)
     end
