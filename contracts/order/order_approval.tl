@@ -259,10 +259,7 @@ func cancel_trigger_order(order_id: int):
     # It is assumed that the order is deleted once it is executed.
     # Send remaining amount back to user.
 
-    int remaining_amount = order.amount
-    if order.is_partial_allowed:
-        remaining_amount = remaining_amount - order.filled_amount
-    end
+    int remaining_amount = order.amount - order.filled_amount
 
     assert(!order.collected_target_amount)
 
@@ -309,9 +306,8 @@ func start_execute_trigger_order(order_id: int, fill_amount: int, index_diff: in
     assert(index_diff >= 2)
 
     # If partial filling is not allowed, executor should fill the whole order at once. Otherwise smaller amounts are allowed.
-    int remaining_amount = order.amount
+    int remaining_amount = order.amount - order.filled_amount
     if order.is_partial_allowed:
-        remaining_amount = remaining_amount - order.filled_amount
         assert(fill_amount <= remaining_amount)
     else:
         assert(fill_amount == remaining_amount)
@@ -355,9 +351,8 @@ func end_execute_trigger_order(order_id: int, fill_amount: int, index_diff: int)
 
     int received_amount = check_received_target_asset(Txn.GroupIndex - 1, Global.CurrentApplicationAddress, order.target_asset_id, minimum_amount)
 
-    int remaining_amount = order.amount
+    int remaining_amount = order.amount - order.filled_amount
     if order.is_partial_allowed:
-        remaining_amount = remaining_amount - order.filled_amount
         assert(fill_amount <= remaining_amount)
     else:
         assert(fill_amount == remaining_amount)
